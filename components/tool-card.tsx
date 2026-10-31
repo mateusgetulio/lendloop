@@ -13,13 +13,14 @@ export function ToolCard({
 }) {
   return (
     <li className="card">
-      <h2>
-        <Link href={`/tools/${tool._id}`}>{tool.name}</Link>
+      <p className="eyebrow">{label(tool.category)}</p>
+      <h2 className="card-title">
+        <Link className="card-link" href={`/tools/${tool._id}`}>
+          {tool.name}
+        </Link>
       </h2>
       <Badge>{tool.availability}</Badge>
-      <p>
-        {label(tool.category)} · {label(tool.condition)}
-      </p>
+      <p className="meta">Condition: {label(tool.condition)}</p>
       <p className="owner">
         {tool.ownerName}
         {tool.trustedLender && (

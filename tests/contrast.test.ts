@@ -15,6 +15,17 @@ function luminance(hex: string) {
 }
 const pairs: [string, string, string, number][] = [
   ["text", c.text, c.page, 4.5],
+  ["text on card", c.text, c.white, 4.5],
+  ["muted on card", c.muted, c.white, 4.5],
+  ["link on card", c.primary, c.white, 4.5],
+  ["input border on card", c.border, c.white, 3],
+  ["danger on card", c.danger, c.white, 4.5],
+  ["band text", c.page, c.navy, 4.5],
+  ["band muted text", c.periwinkleSoft, c.navy, 4.5],
+  ["band link and eyebrow", c.periwinkle, c.navy, 4.5],
+  ["band primary button", c.navy, c.periwinkle, 4.5],
+  ["band button hover", c.page, c.primary, 4.5],
+  ["band focus ring", c.periwinkle, c.navy, 3],
   ["muted", c.muted, c.page, 4.5],
   ["primary", c.white, c.primary, 4.5],
   ["hover", c.white, c.primaryHover, 4.5],
@@ -27,7 +38,7 @@ const pairs: [string, string, string, number][] = [
   ["danger badge", c.dangerText, c.dangerBackground, 4.5],
   ["neutral", c.neutralText, c.neutralBackground, 4.5],
   ["info", c.infoText, c.infoBackground, 4.5],
-  ["selected filter", c.primary, c.successBackground, 4.5],
+  ["trusted badge on card", c.infoText, c.infoBackground, 4.5],
   ["error text", c.danger, c.page, 4.5],
   ["danger hover", c.white, c.dangerText, 4.5],
 ];

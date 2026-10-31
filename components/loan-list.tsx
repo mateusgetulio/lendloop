@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { FunctionReturnType } from "convex/server";
-import { Badge, Confirm, Empty, MoreResults, message } from "./common";
+import { Badge, Band, Confirm, Empty, MoreResults, message } from "./common";
+import { formatRange } from "@/lib/catalog";
 type Loan = FunctionReturnType<typeof api.loans.list>["page"][number];
 export function LoanList({ view }: { view: "borrowing" | "incoming" }) {
   const { results, status, loadMore } = usePaginatedQuery(
@@ -45,12 +46,15 @@ export function LoanList({ view }: { view: "borrowing" | "incoming" }) {
   const day = settings?.today;
   return (
     <>
-      <h1>{view === "borrowing" ? "My requests" : "Incoming requests"}</h1>
-      <p>
-        {view === "borrowing"
-          ? "Track the tools you have asked to borrow."
-          : "Manage requests for your tools. Confirm each return when the tool is back."}
-      </p>
+      <Band
+        eyebrow={view === "borrowing" ? "Borrowing" : "Lending"}
+        title={view === "borrowing" ? "My requests" : "Incoming requests"}
+        lede={
+          view === "borrowing"
+            ? "Track the tools you have asked to borrow."
+            : "Manage requests for your tools. Confirm each return when the tool is back."
+        }
+      />
       {notice && <p role="status">{notice}</p>}
       {error && !confirm && <p role="alert">{error}</p>}
       {status === "LoadingFirstPage" ? (
@@ -74,18 +78,20 @@ export function LoanList({ view }: { view: "borrowing" | "incoming" }) {
         <ul className="loan-list">
           {results.map((loan) => (
             <li className="card" key={loan._id}>
-              <h2>{loan.toolName}</h2>
-              <Badge>
-                {loan.status === "approved" && day && loan.endDate < day
-                  ? "Overdue"
-                  : loan.status === "pending" && day && loan.startDate < day
-                    ? "Expired"
-                    : loan.status}
-              </Badge>
-              <p>
-                {loan.startDate} to {loan.endDate}
+              <div className="loan-head">
+                <h2>{loan.toolName}</h2>
+                <Badge>
+                  {loan.status === "approved" && day && loan.endDate < day
+                    ? "Overdue"
+                    : loan.status === "pending" && day && loan.startDate < day
+                      ? "Expired"
+                      : loan.status}
+                </Badge>
+              </div>
+              <p className="meta">
+                {formatRange(loan.startDate, loan.endDate)}
               </p>
-              <p>
+              <p className="meta">
                 {view === "borrowing" ? "Lent by" : "Requested by"}{" "}
                 {loan.otherPartyName}
               </p>

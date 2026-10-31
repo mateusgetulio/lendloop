@@ -4,7 +4,7 @@ import { convexTest } from "convex-test";
 import schema from "../convex/schema";
 import { api, internal } from "../convex/_generated/api";
 import { calendarDay, validDate } from "../convex/lib/dates";
-import { overlaps } from "../lib/catalog";
+import { formatRange, overlaps } from "../lib/catalog";
 const modules = import.meta.glob("../convex/**/*.ts");
 const page = { paginationOpts: { numItems: 20, cursor: null } };
 const listing = {
@@ -640,4 +640,12 @@ it("shows each side of a loan the other participant's name, and admins both", as
   const lenders = await admin.query(api.admin.lenders, page);
   const alex = lenders.page.find((u) => u.displayName === "Alex");
   expect(alex?.listingNames).toEqual(["Cordless drill"]);
+});
+
+it("formats date ranges without shifting days across timezones", () => {
+  expect(formatRange("2026-11-02", "2026-11-04")).toBe("Nov 2 to Nov 4, 2026");
+  expect(formatRange("2026-12-30", "2027-01-02")).toBe(
+    "Dec 30, 2026 to Jan 2, 2027",
+  );
+  expect(formatRange("2026-11-02", "2026-11-02")).toBe("Nov 2, 2026");
 });

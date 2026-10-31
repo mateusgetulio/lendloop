@@ -72,7 +72,11 @@ export function ListingForm({
     }
   }
   return (
-    <form onSubmit={submit} noValidate className="form-stack">
+    <form
+      onSubmit={submit}
+      noValidate
+      className="form-stack panel listing-form"
+    >
       <h2>{tool ? "Edit listing" : "List a tool"}</h2>
       <div>
         <label htmlFor="name">Name</label>

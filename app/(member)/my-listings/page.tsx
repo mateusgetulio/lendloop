@@ -4,7 +4,13 @@ import { useMutation, usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { ToolCard, type Tool } from "@/components/tool-card";
 import { ListingForm } from "@/components/listing-form";
-import { Confirm, Empty, MoreResults, message } from "@/components/common";
+import {
+  Band,
+  Confirm,
+  Empty,
+  MoreResults,
+  message,
+} from "@/components/common";
 export default function Page() {
   const { results, status, loadMore } = usePaginatedQuery(
     api.tools.mine,
@@ -32,20 +38,24 @@ export default function Page() {
   }
   return (
     <>
-      <div className="title-row">
-        <h1>My listings</h1>
-        {!editing && (
-          <button
-            className="primary"
-            onClick={() => {
-              setEditing("new");
-              setSaved("");
-            }}
-          >
-            List a tool
-          </button>
-        )}
-      </div>
+      <Band
+        eyebrow="Lending"
+        title="My listings"
+        lede="The tools you share with your neighbors."
+        action={
+          !editing && (
+            <button
+              className="primary"
+              onClick={() => {
+                setEditing("new");
+                setSaved("");
+              }}
+            >
+              List a tool
+            </button>
+          )
+        }
+      />
       {saved && <p role="status">{saved}</p>}
       {editing ? (
         <ListingForm

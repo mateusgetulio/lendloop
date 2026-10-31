@@ -50,7 +50,7 @@ The automated suite exercises public functions through authenticated test identi
 | Calendar refresh changes availability without modifying loans                                                                                     | Pass   |
 | Non-UTC midnight and daylight-saving boundaries use the configured timezone                                                                       | Pass   |
 
-`npm test` passed 82 checks: 66 core checks and 16 contrast checks. CI runs this on every push.
+`npm test` passed 94 checks: 67 core checks and 27 contrast checks. CI runs this on every push.
 
 ## Real Clerk authentication
 
@@ -111,6 +111,10 @@ These came from walking through the app as each person, on top of the automated 
 - Escape closes the More menu.
 
 All accounts in these checks showed as `Neighbor`, because Clerk session tokens carry no name by default. Adding a name claim is documented in the README but has not been tested.
+
+## Visual design checks
+
+The visual design changed after the checks above, so the size, overflow and keyboard checks were repeated at 320 px and 1280 px on the public page, catalog, tool detail, listings, requests, incoming and admin screens. Every color pair the design uses is covered by the contrast tests, including text and controls on the navy band.
 
 ## Timezone checks
 

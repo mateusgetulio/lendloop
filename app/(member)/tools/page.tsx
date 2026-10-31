@@ -6,7 +6,7 @@ import { usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { categories, label } from "@/lib/catalog";
 import { ToolCard } from "@/components/tool-card";
-import { Empty, MoreResults } from "@/components/common";
+import { Band, Empty, MoreResults } from "@/components/common";
 function Catalog() {
   const params = useSearchParams(),
     value = params.get("category"),
@@ -18,22 +18,26 @@ function Catalog() {
   );
   return (
     <>
-      <h1>Tools</h1>
-      <p>Availability is for today. Open a tool to check your dates.</p>
-      <nav className="filters" aria-label="Filter by category">
-        <Link href="/tools" aria-current={!category ? "page" : undefined}>
-          All
-        </Link>
-        {categories.map((c) => (
-          <Link
-            key={c}
-            href={`/tools?category=${c}`}
-            aria-current={category === c ? "page" : undefined}
-          >
-            {label(c)}
+      <Band
+        eyebrow="Browse"
+        title="Tools"
+        lede="Availability is for today. Open a tool to check your dates."
+      >
+        <nav className="filters" aria-label="Filter by category">
+          <Link href="/tools" aria-current={!category ? "page" : undefined}>
+            All
           </Link>
-        ))}
-      </nav>
+          {categories.map((c) => (
+            <Link
+              key={c}
+              href={`/tools?category=${c}`}
+              aria-current={category === c ? "page" : undefined}
+            >
+              {label(c)}
+            </Link>
+          ))}
+        </nav>
+      </Band>
       {status === "LoadingFirstPage" ? (
         <p role="status">Loading tools...</p>
       ) : results.length === 0 ? (

@@ -11,6 +11,7 @@ import { SignInButton, useClerk } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { api } from "@/convex/_generated/api";
+import { Band } from "./common";
 import type { FunctionReturnType } from "convex/server";
 type User = NonNullable<FunctionReturnType<typeof api.users.current>["user"]>;
 const Session = createContext<{
@@ -95,7 +96,9 @@ export function SessionLayout({ children }: { children: ReactNode }) {
                 )}
               </nav>
               <div className="account desktop-account">
-                <span>{user?.displayName ?? "Preparing account"}</span>
+                <span className="account-name">
+                  {user?.displayName ?? "Preparing account"}
+                </span>
                 <button onClick={() => void signOut({ redirectUrl: "/" })}>
                   Sign out
                 </button>
@@ -163,13 +166,16 @@ export function MemberGate({ children }: { children: ReactNode }) {
   if (session.loading) return <p role="status">Loading your account...</p>;
   if (!session.authenticated)
     return (
-      <section>
-        <h1>Sign in to lend or borrow</h1>
-        <p>Your listings and requests are private to your account.</p>
-        <SignInButton mode="modal">
-          <button className="primary">Sign in</button>
-        </SignInButton>
-      </section>
+      <Band
+        eyebrow="Members"
+        title="Sign in to lend or borrow"
+        lede="Your listings and requests are private to your account."
+        action={
+          <SignInButton mode="modal">
+            <button className="primary">Sign in</button>
+          </SignInButton>
+        }
+      />
     );
   return children;
 }

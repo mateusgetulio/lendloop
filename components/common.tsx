@@ -46,7 +46,9 @@ export function MoreResults({
   loadMore: (n: number) => void;
 }) {
   return status === "CanLoadMore" ? (
-    <button onClick={() => loadMore(20)}>Load more</button>
+    <button className="load-more" onClick={() => loadMore(20)}>
+      Load more
+    </button>
   ) : status === "LoadingMore" ? (
     <p role="status">Loading more...</p>
   ) : null;
@@ -98,5 +100,32 @@ export function Confirm({
         </button>
       </div>
     </dialog>
+  );
+}
+export function Band({
+  eyebrow,
+  title,
+  lede,
+  action,
+  children,
+}: {
+  eyebrow: string;
+  title: ReactNode;
+  lede?: ReactNode;
+  action?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="band">
+      <div className="band-row">
+        <div>
+          <p className="eyebrow">{eyebrow}</p>
+          <h1>{title}</h1>
+          {lede && <p className="lede">{lede}</p>}
+        </div>
+        {action}
+      </div>
+      {children}
+    </div>
   );
 }

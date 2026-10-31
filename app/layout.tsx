@@ -14,14 +14,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       `--color-${key}`,
       value,
     ]),
-  ) as CSSProperties;
+  ) as Record<string, string>;
+  style["--shadow-card"] = tokens.shadow.card;
+  style["--shadow-raised"] = tokens.shadow.raised;
   return (
     <ClerkProvider
       appearance={{
         variables: {
           colorPrimary: tokens.color.primary,
           colorForeground: tokens.color.text,
-          colorBackground: tokens.color.page,
+          colorBackground: tokens.color.white,
           fontFamily: "system-ui, sans-serif",
           fontSize: "16px",
         },
@@ -39,7 +41,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         },
       }}
     >
-      <html lang="en" style={style}>
+      <html lang="en" style={style as CSSProperties}>
         <body>
           <Providers>
             <SessionLayout>{children}</SessionLayout>
