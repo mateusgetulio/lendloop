@@ -8,11 +8,15 @@ A neighborhood tool-lending board built with Next.js, Clerk, Convex and n8n. Bor
 - Send daily overdue reminders with duplicate-safe callbacks and recoverable delivery.
 - Administer listings, Trusted Lender badges, all loans and automation failures.
 
+## Demo
+
+![Silent demo of LendLoop: a request and approval, its notification and n8n execution, an n8n outage recovered by admin retry, and one overdue reminder after two workflow runs](docs/demo.gif)
+
+45 seconds, silent, looping. Download the sharper [MP4 version](docs/demo.mp4). It shows mock delivery inside the app, with no external email or SMS.
+
 ## Fastest path
 
 You need Node 22.22.0, npm 10.9.4, Docker Compose and a Clerk development application. The complete first run is: install, configure Clerk and the two environment files, start local Convex, configure its environment, start/import n8n, then start Next.js. Follow the numbered setup below in order. No Convex account is required.
-
-The 45-second silent [demo video](docs/demo.mp4) shows a request and approval, its notification execution, an unavailable workflow service recovered by admin retry, and one overdue reminder after two workflow runs. It shows mock delivery inside the app, with no external email or SMS delivery.
 
 ## Setup
 

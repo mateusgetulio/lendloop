@@ -26,7 +26,7 @@ Browser and integration checks ran on macOS arm64, with Docker through OrbStack.
 
 A new clone of the public repository was set up by following the README in order: install, environment files, local Convex, `scripts/configure.mjs`, Docker n8n on an empty volume, `scripts/n8n-setup.sh`, then Next.js. The only temporary warning was the missing issuer before configuration, which the README describes. It used a separate Docker project and a new local Convex deployment.
 
-`node scripts/check-clerk.mjs` and `npm run verify` then passed: 16 check groups with real Clerk browser sign-in, plus 48 screen measurements at 320 px and 1280 px with no sideways scrolling and no control under 44 by 44 CSS pixels. A second new clone recorded `docs/demo.mp4`, which is 45 seconds, silent and under 500 KB. The recording also checked the seed: it refuses without its flag, and a second run changes nothing.
+`node scripts/check-clerk.mjs` and `npm run verify` then passed: 16 check groups with real Clerk browser sign-in, plus 48 screen measurements at 320 px and 1280 px with no sideways scrolling and no control under 44 by 44 CSS pixels. A second new clone recorded `docs/demo.mp4`, which is 45 seconds, silent and under 500 KB. `docs/demo.gif` is made from it, because GitHub plays a GIF inside the README but only links to a video file. The recording also checked the seed: it refuses without its flag, and a second run changes nothing.
 
 ## Acceptance scenarios
 
