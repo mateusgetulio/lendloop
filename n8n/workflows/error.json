@@ -1,0 +1,83 @@
+{
+  "id": "LendLoopErrorM1",
+  "name": "Foundation probe: error report",
+  "nodes": [
+    {
+      "id": "Error-Trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "parameters": {}
+    },
+    {
+      "id": "Sign-failure",
+      "name": "Sign failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [300, 0],
+      "parameters": {
+        "jsCode": "const crypto=require('crypto');\nconst payload=JSON.stringify({spike:true,errorWorkflowRan:true});\nconst timestamp=String(Math.floor(Date.now()/1000));\nconst signature='v1='+crypto.createHmac('sha256',$env.N8N_TO_CONVEX_SECRET).update(`v1\\n${timestamp}\\nfailure-report\\n${payload}`,'utf8').digest('hex');\nreturn [{json:{timestamp,signature,envelope:JSON.stringify({payload})}}];"
+      }
+    },
+    {
+      "id": "Report-failure",
+      "name": "Report failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LENDLOOP_CONVEX_HTTP_URL + '/automation/failures' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-LendLoop-Timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "X-LendLoop-Signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.envelope }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Sign failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign failure": {
+      "main": [
+        [
+          {
+            "node": "Report failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

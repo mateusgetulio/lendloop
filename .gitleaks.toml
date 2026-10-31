@@ -1,0 +1,8 @@
+title = "LendLoop secret scanning"
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Exact fictional public Clerk publishable key used only for offline CI builds"
+regexTarget = "match"
+regexes = ['''pk_test_Y2ktcGxhY2Vob2xkZXIuY2xlcmsuYWNjb3VudHMuZGV2JA''']

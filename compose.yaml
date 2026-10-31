@@ -1,0 +1,27 @@
+services:
+  n8n:
+    image: n8nio/n8n:2.45.7
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Set N8N_ENCRYPTION_KEY in .env}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      NODE_FUNCTION_ALLOW_BUILTIN: crypto
+      N8N_RUNNERS_ENABLED: "true"
+      N8N_RUNNERS_MODE: internal
+      N8N_SECURE_COOKIE: "false"
+      GENERIC_TIMEZONE: ${APP_TIMEZONE:-UTC}
+      TZ: ${APP_TIMEZONE:-UTC}
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: "168"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      CONVEX_TO_N8N_SECRET: ${CONVEX_TO_N8N_SECRET:?Set signing secret}
+      N8N_TO_CONVEX_SECRET: ${N8N_TO_CONVEX_SECRET:?Set callback signing secret}
+      LENDLOOP_CONVEX_HTTP_URL: ${LENDLOOP_CONVEX_HTTP_URL:-http://host.docker.internal:3211}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/workflows:ro
+volumes:
+  n8n_data:
