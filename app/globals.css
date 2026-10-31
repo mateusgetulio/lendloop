@@ -522,6 +522,33 @@ section {
   padding-left: 20px;
   margin: 0 0 12px;
 }
+.activity {
+  width: 100%;
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--color-muted);
+}
+.card .actions + .activity {
+  padding-top: 12px;
+  border-top: 1px solid var(--color-hairline);
+}
+.card .actions:empty {
+  display: none;
+}
+.activity ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.activity p {
+  margin: 0;
+}
+td .activity {
+  margin: 0;
+}
+section h3 {
+  margin-top: 24px;
+}
 .note {
   font-size: 14px;
   color: var(--color-muted);
@@ -611,7 +638,10 @@ th,
 td {
   padding: 12px 16px;
   text-align: left;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+}
+.cell-action button {
+  white-space: nowrap;
 }
 th {
   color: var(--color-muted);

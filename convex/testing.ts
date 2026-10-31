@@ -239,18 +239,6 @@ export const health = internalMutation({
     await refreshCalendar(ctx, now);
   },
 });
-export const markFailed = internalMutation({
-  args: { eventId: v.id("automationEvents") },
-  handler: async (ctx, args) => {
-    guard();
-    await ctx.db.patch(args.eventId, {
-      state: "failed",
-      attempts: 5,
-      lastError: "Synthetic delivery failure for interface verification.",
-      updatedAt: Date.now(),
-    });
-  },
-});
 export const occurrence = internalMutation({
   args: { eventId: v.id("automationEvents"), occurredAt: v.number() },
   handler: async (ctx, args) => {

@@ -6,6 +6,7 @@ import { api } from "@/convex/_generated/api";
 import type { FunctionReturnType } from "convex/server";
 import { Badge, Band, Confirm, Empty, MoreResults, message } from "./common";
 import { formatRange } from "@/lib/catalog";
+import { LoanActivity } from "./loan-activity";
 type Loan = FunctionReturnType<typeof api.loans.list>["page"][number];
 export function LoanList({ view }: { view: "borrowing" | "incoming" }) {
   const { results, status, loadMore } = usePaginatedQuery(
@@ -150,6 +151,7 @@ export function LoanList({ view }: { view: "borrowing" | "incoming" }) {
                   )}
                 {busy === loan._id && <span role="status">Saving...</span>}
               </div>
+              <LoanActivity loanId={loan._id} />
             </li>
           ))}
         </ul>

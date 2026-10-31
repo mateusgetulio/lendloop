@@ -917,6 +917,11 @@ console.log(JSON.stringify(Object.keys(JSON.parse(input.payload)).sort()));
   );
   if (browser)
     await check(
+      "Listing forms, category history, trust controls and confirmation are keyboard operable",
+      () => browser!.coreFlows(),
+    );
+  if (browser)
+    await check(
       "Notification and automation screens retain the shared design at phone and desktop sizes",
       async () => {
         await browser!.notifications();

@@ -135,6 +135,9 @@ export async function openBrowserChecks(command: Command) {
     return client;
   }
   return {
+    session(role: string) {
+      return sessions.get(role)!;
+    },
     actors: {
       lender: users[0].localId,
       borrower: users[1].localId,
@@ -187,6 +190,157 @@ export async function openBrowserChecks(command: Command) {
         { paginationOpts: { numItems: 50, cursor: null } },
       );
     },
+    async coreFlows() {
+      const page = sessions.get("lender")!.page,
+        borrower = sessions.get("borrower")!.page,
+        admin = sessions.get("admin")!.page;
+      const name = "Keyboard check " + randomUUID().slice(0, 8),
+        edited = name + " edited";
+      const owner = await clientFor(page);
+      const ids: string[] = [];
+      async function enter(
+        button: ReturnType<Page["getByRole"]>,
+        target: Page = page,
+      ) {
+        await button.focus();
+        await target.keyboard.press("Enter");
+      }
+      try {
+        await page.setViewportSize({ width: 320, height: 900 });
+        await page.goto("http://localhost:3000/my-listings");
+        await enter(
+          page.getByRole("button", { name: "List a tool", exact: true }),
+        );
+        await page.getByLabel("Name", { exact: true }).focus();
+        await page.keyboard.press("Tab");
+        await expect(page.locator(".field-error")).toHaveCount(0);
+        await enter(
+          page.getByRole("button", { name: "Save listing", exact: true }),
+        );
+        await expect(
+          page.getByText("Name is required.", { exact: true }),
+        ).toBeVisible();
+        await page.getByLabel("Name", { exact: true }).fill(name);
+        await page
+          .getByLabel("Category", { exact: true })
+          .selectOption("other");
+        await page
+          .getByLabel("Short description", { exact: true })
+          .fill("A tool for keyboard checks.");
+        await page.screenshot({
+          path: "test-results/ui/listing-form-320.png",
+          fullPage: true,
+        });
+        await enter(
+          page.getByRole("button", { name: "Save listing", exact: true }),
+        );
+        await expect(
+          page.getByText("Listing saved.", { exact: true }),
+        ).toBeVisible();
+        const own = await owner.query(
+          makeFunctionReference<"query">("tools:mine"),
+          { paginationOpts: { numItems: 50, cursor: null } },
+        );
+        const tool = own.page.find(
+          (item: { name: string }) => item.name === name,
+        );
+        ids.push(tool._id);
+        let card = page
+          .locator("li.card")
+          .filter({ has: page.getByRole("heading", { name, exact: true }) });
+        await enter(
+          card.getByRole("button", { name: "Edit listing", exact: true }),
+        );
+        await page.getByLabel("Name", { exact: true }).fill(edited);
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await page.screenshot({
+          path: "test-results/ui/listing-form-1280.png",
+          fullPage: true,
+        });
+        await enter(
+          page.getByRole("button", { name: "Save changes", exact: true }),
+        );
+        await expect(
+          page.getByRole("heading", { name: edited, exact: true }),
+        ).toBeVisible();
+        await borrower.goto("http://localhost:3000/tools");
+        await enter(
+          borrower
+            .getByRole("navigation", { name: "Filter by category" })
+            .getByRole("link", { name: "Other", exact: true }),
+          borrower,
+        );
+        await expect(borrower).toHaveURL(/category=other/);
+        await borrower.getByRole("link", { name: edited, exact: true }).click();
+        await expect(borrower).toHaveURL(new RegExp("/tools/" + tool._id));
+        await borrower.goBack();
+        await expect(borrower).toHaveURL(/category=other/);
+        await admin.goto("http://localhost:3000/admin");
+        const section = admin.locator("section").filter({
+          has: admin.getByRole("heading", {
+            name: "Trusted Lenders",
+            exact: true,
+          }),
+        });
+        await expect(section.getByRole("table")).toBeVisible();
+        const trust = section.getByRole("button", { name: new RegExp(edited) });
+        for (let i = 0; i < 20 && !(await trust.isVisible()); i++) {
+          const more = section.getByRole("button", {
+            name: "Load more",
+            exact: true,
+          });
+          if (!(await more.isVisible())) break;
+          const before = await section.locator("tbody tr").count();
+          await more.click();
+          await expect
+            .poll(() => section.locator("tbody tr").count())
+            .toBeGreaterThan(before);
+        }
+        await enter(trust, admin);
+        await expect(trust).toHaveAttribute("aria-pressed", "true");
+        await borrower.reload();
+        await expect(
+          borrower
+            .locator("li.card")
+            .filter({ hasText: edited })
+            .getByText("Trusted Lender", { exact: true }),
+        ).toBeVisible();
+        await page.goto("http://localhost:3000/my-listings");
+        card = page.locator("li.card").filter({
+          has: page.getByRole("heading", { name: edited, exact: true }),
+        });
+        await enter(
+          card.getByRole("button", { name: "Delete listing", exact: true }),
+        );
+        await page.keyboard.press("Escape");
+        await expect(card).toBeVisible();
+        await enter(
+          card.getByRole("button", { name: "Delete listing", exact: true }),
+        );
+        await enter(
+          page
+            .getByRole("dialog")
+            .getByRole("button", { name: "Delete listing", exact: true }),
+        );
+        await expect(
+          page.getByText("Listing deleted.", { exact: true }),
+        ).toBeVisible();
+        await borrower.goto("http://localhost:3000/tools/not-an-id");
+        await expect(
+          borrower.getByRole("heading", {
+            name: "Tool unavailable",
+            exact: true,
+          }),
+        ).toBeVisible();
+      } finally {
+        for (const toolId of ids)
+          await owner
+            .mutation(makeFunctionReference<"mutation">("tools:remove"), {
+              toolId,
+            })
+            .catch(() => {});
+      }
+    },
     async inspect() {
       await mkdir("test-results/ui", { recursive: true });
       const measured = [];
@@ -194,7 +348,22 @@ export async function openBrowserChecks(command: Command) {
         for (const role of ["borrower", "lender", "admin"]) {
           const { page } = sessions.get(role)!;
           await page.setViewportSize({ width, height: 900 });
-          for (const path of ["/notifications", "/admin"]) {
+          const client = await clientFor(page);
+          const catalog = await client.query(
+            makeFunctionReference<"query">("tools:list"),
+            { paginationOpts: { numItems: 1, cursor: null } },
+          );
+          const paths = [
+            "/",
+            "/tools",
+            "/my-listings",
+            "/my-requests",
+            "/incoming",
+            "/notifications",
+            "/admin",
+            ...(catalog.page[0] ? ["/tools/" + catalog.page[0]._id] : []),
+          ];
+          for (const path of paths) {
             await page.goto("http://localhost:3000" + path);
             await page.getByRole("heading", { level: 1 }).waitFor();
             await page.waitForTimeout(300);
@@ -262,7 +431,7 @@ export async function openBrowserChecks(command: Command) {
               window.scrollTo(0, 0);
             });
             await page.screenshot({
-              path: `test-results/ui/${role}-${width}-${path.slice(1)}.png`,
+              path: `test-results/ui/${role}-${width}-${path.slice(1).replaceAll("/", "-") || "home"}.png`,
               fullPage: true,
             });
             if (role === "admin" && path === "/admin") {

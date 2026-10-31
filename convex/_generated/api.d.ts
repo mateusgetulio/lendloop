@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as activity from "../activity.js";
 import type * as admin from "../admin.js";
 import type * as automation from "../automation.js";
 import type * as clock from "../clock.js";
@@ -21,6 +22,7 @@ import type * as lib_signatures from "../lib/signatures.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as loans from "../loans.js";
 import type * as notifications from "../notifications.js";
+import type * as seed from "../seed.js";
 import type * as testing from "../testing.js";
 import type * as tools from "../tools.js";
 import type * as users from "../users.js";
@@ -32,6 +34,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  activity: typeof activity;
   admin: typeof admin;
   automation: typeof automation;
   clock: typeof clock;
@@ -45,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   "lib/validators": typeof lib_validators;
   loans: typeof loans;
   notifications: typeof notifications;
+  seed: typeof seed;
   testing: typeof testing;
   tools: typeof tools;
   users: typeof users;

@@ -1,17 +1,26 @@
 # LendLoop
 
-A neighborhood tool-lending board. Neighbors can list tools, request dates, approve or decline requests, cancel future reservations, and confirm returns. Administrators can remove any listing, view all loans, and mark Trusted Lenders.
+A neighborhood tool-lending board built with Next.js, Clerk, Convex and n8n. Borrow what you need. Lend what you don't.
 
-Changes create durable automation events in the same transaction as each loan transition. Signed workflows deliver personal notifications and daily overdue reminders. Administrators can monitor failures, pending delivery age and missing reminders, and retry failed deliveries. A repeatable demonstration seed and activity history are not implemented.
+- List tools, filter by category and request inclusive calendar dates.
+- Approve or decline requests, cancel future reservations and confirm returns.
+- Read personal notifications and see kind/time activity on each loan.
+- Send daily overdue reminders with duplicate-safe callbacks and recoverable delivery.
+- Administer listings, Trusted Lender badges, all loans and automation failures.
 
-- `DECISIONS.md`: front-end choices and their sources.
-- `docs/verification.md`: checks performed, results and limitations.
+## Fastest path
 
-## Prerequisites
+You need Node 22.22.0, npm 10.9.4, Docker Compose and a Clerk development application. The complete first run is: install, configure Clerk and the two environment files, start local Convex, configure its environment, start/import n8n, then start Next.js. Follow the numbered setup below in order. No Convex account is required.
 
-Use Node 22.22.0 from `.nvmrc` and npm 10.9.4. The lockfile must only be changed with that exact pair. Docker Compose and a Clerk development application with the Convex integration activated are also required.
+The silent [demo](docs/demo.mp4) shows a request and approval, its notification execution, an unavailable workflow service recovered by admin retry, and one overdue reminder after two workflow runs. It shows mock delivery inside the app, with no external email or SMS delivery.
+
+## Setup
+
+### 1. Install
 
 ```sh
+git clone https://github.com/mateusgetulio/lendloop.git
+cd lendloop
 nvm install
 nvm use
 node --version
@@ -20,109 +29,194 @@ npm ci
 cp .env.example .env
 ```
 
-Generate independent values with `openssl rand -hex 32` for `N8N_ENCRYPTION_KEY`, `CONVEX_TO_N8N_SECRET` and `N8N_TO_CONVEX_SECRET`. Keep these in `.env`, and keep the encryption key stable for the persistent n8n volume.
+Confirm Node is `v22.22.0` and npm is `10.9.4`. Only that pair may change the lockfile. Runtime files `.env` and `.env.local` are ignored.
 
-## Run it
+### 2. Configure Clerk and environment files
 
-Start Convex and leave it running:
+Create a Clerk development application with email verification codes enabled. In the Clerk dashboard, activate the **Convex integration** and copy its issuer domain. The backend uses `applicationID: "convex"`. Copy the development publishable key and secret key from API Keys. Keep the secret key private. Production Clerk keys are not used by the verification scripts.
+
+Fill in `.env`. Generate three independent values with `openssl rand -hex 32` for encryption and directional signing. Keep the encryption key stable while reusing a Docker volume. Set one timezone, such as `America/Sao_Paulo`, for the entire application. Keep the default loopback ports.
+
+Create `.env.local` with these Clerk fields; local Convex will add its own deployment selection and URL:
+
+```dotenv
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<development-publishable-key>
+CLERK_SECRET_KEY=<development-secret-key>
+CLERK_JWT_ISSUER_DOMAIN=https://<your-development-issuer>
+```
+
+| Component                   | File or environment            | Values                                                                                                                                            |
+| --------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Docker/n8n                  | `.env`                         | `N8N_ENCRYPTION_KEY`, `CONVEX_TO_N8N_SECRET`, `N8N_TO_CONVEX_SECRET`, `APP_TIMEZONE`, `LENDLOOP_CONVEX_HTTP_URL=http://host.docker.internal:3211` |
+| Backend configuration input | `.env`                         | `N8N_NOTIFY_URL=http://localhost:5678/webhook/lendloop-notify`                                                                                    |
+| Next.js and Clerk scripts   | `.env.local`                   | Clerk fields above, plus CLI-generated `NEXT_PUBLIC_CONVEX_URL=http://127.0.0.1:3210` and deployment selection                                    |
+| Convex deployment           | Set by `scripts/configure.mjs` | Issuer, timezone, both directional secrets and notification URL                                                                                   |
+| Optional Convex controls    | Set with `npx convex env set`  | `DEMO_SEED_ENABLED=true` only while creating demo data; `AUTOMATION_BACKOFF_SECONDS=60,120,240,480,120` overrides five retry/deadline delays      |
+
+Only `NEXT_PUBLIC_` values reach the browser. Docker uses `.env`; Next.js also reads `.env.local`. The configure script copies just the backend fields into the separate Convex deployment environment without printing private values.
+
+### 3. Start local Convex
+
+In terminal one:
 
 ```sh
 CONVEX_AGENT_MODE=anonymous npx convex dev
 ```
 
-The CLI creates `.env.local` with local URLs, port 3210 for the client and 3211 for HTTP actions. Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` and `CLERK_JWT_ISSUER_DOMAIN` to that file. Public-prefixed values must contain only public configuration.
+Leave it running. A new checkout without deployment configuration creates a new local deployment and local database. The CLI writes `.env.local`. The project-local dashboard is at `http://127.0.0.1:6790` when enabled; if the CLI prints `null`, use `npx convex dashboard` to open it. Keep the Clerk entries you added. The usual client and HTTP ports are 3210 and 3211. Do not copy another checkout's deployment configuration or database.
 
-Configure the backend separately:
+If you use a signed-in Convex project instead, choose a local development deployment, then use `npx convex deployment select local`. Hosted deployment is not part of this setup.
 
-```sh
-npx convex env set CLERK_JWT_ISSUER_DOMAIN <your-clerk-issuer>
-npx convex env set APP_TIMEZONE UTC
-npx convex env set CONVEX_TO_N8N_SECRET <value-from-.env>
-npx convex env set N8N_TO_CONVEX_SECRET <value-from-.env>
-npx convex env set N8N_NOTIFY_URL http://localhost:5678/webhook/lendloop-notify
-npx convex run clock:tick
-npm run dev
-```
+The first deployment may show that the issuer is not set yet. Keep the watcher running; the next command supplies it and waits for deployment before refreshing the clock.
 
-Keep `APP_TIMEZONE` consistent between Convex and Docker configuration. It defaults to UTC. The calendar refreshes every minute; the initial tick avoids waiting for the first refresh. Queries use this stored date, while mutations recheck dates against the actual clock in the configured timezone.
-
-Open `http://localhost:3000`. The public query returns only tool names and categories. Sign in to browse details or lend and borrow. Account provisioning is idempotent and gives every new account the ordinary user role. Clerk session tokens carry no name by default, so accounts show as `Neighbor`. To show real names, Clerk lets you add a `name` claim to the session token. That setup has not been tested here. Admins can still tell accounts apart, because each one lists its active tools.
-
-## Lending rules
-
-Dates are inclusive, so two reservations sharing a boundary date overlap. Pending requests do not reserve a tool. Approval rechecks conflicts transactionally. Duplicate overlapping requests by the same borrower are rejected. An overdue outstanding loan prevents new requests and approvals until return.
-
-The borrower can cancel a pending request. Either participant can cancel an approved reservation before its start date. Once it starts, only the lender can confirm return. A pending request whose start date has passed cannot be approved.
-
-Owners can edit only their own active listings. They cannot delete one with a started outstanding loan. Administrators can remove any listing. Removal preserves history, declines pending requests, cancels future approved loans, and leaves started loans returnable. Every actual request/status change writes its pending automation event in the same transaction. Repeating a completed transition adds no event.
-
-Availability badges mean today, not every future date. Busy ranges on the detail page reveal no borrower identity. Category filters live in the URL and survive the Back button.
-
-## Administrator setup
-
-Sign in once to create the local user profile. Open the local Convex dashboard and find the intended account in `users`, matching its Clerk subject against `tokenIdentifier`. Copy its local `_id`, then run:
+In terminal two, from the same folder:
 
 ```sh
-npx convex run admin:promote '{"userId":"<local-user-id>"}'
+node scripts/configure.mjs
 ```
 
-This is an internal developer operation, not a browser-callable promotion endpoint. The Admin destination appears for that account. Trusted Lender is only a badge and never grants permissions.
+This requires Convex to be running. It sets backend auth and integration variables and refreshes the calendar. Wait for the watching terminal to finish deploying before signing in.
 
-## Notifications and reminders
+### 4. Start and publish n8n
+
+In terminal two:
 
 ```sh
 docker compose up -d
 sh scripts/n8n-setup.sh
-node scripts/check-clerk.mjs
 ```
 
-Import targets the dedicated project volume and fixed workflow IDs. It unpublishes existing workflows on that instance, imports and publishes request notifications, overdue reminders and the error workflow, then restarts n8n. Never run it on an instance holding unrelated work. In n8n, open Settings for Request notifications and Overdue reminders and confirm Workflow errors is selected as the error workflow. The imported definitions already reference its fixed identifier. The first visit to `http://localhost:5678` shows n8n's owner screen.
+The import script waits for n8n readiness, then unpublishes existing workflows in this dedicated instance, imports the three files and publishes `LendLoopNotify`, `LendLoopOverdue` and `LendLoopError`, then restarts n8n. It is safe to repeat on this project's volume. Do not point it at unrelated workflows.
 
-Docker reaches the backend at `host.docker.internal:3211`; the backend reaches n8n through `localhost:5678`. The Linux host-gateway entry is configured but integration networking has only been exercised on macOS with OrbStack.
+Open `http://localhost:5678`. On an empty volume, complete n8n's owner-account screen. This account is separate from Clerk; use your own local credentials. No n8n credentials are included in source. In Settings for **Request notifications** and **Overdue reminders**, confirm **Workflow errors** is selected as the error workflow. Use production webhook URLs, which the configuration already does.
 
-Notification dispatch claims attempts transactionally before networking. A successful webhook response acknowledges receipt; only the signed callback marks delivery. A minute sweep recovers due work, with five attempts and a final callback deadline. Set the optional Convex variable `AUTOMATION_BACKOFF_SECONDS` to five positive integer seconds to override `60,120,240,480,120`. Admin retry preserves the event identifier and notification deduplication key.
+`docker compose down` preserves the volume. `docker compose down -v` deletes it, including owner credentials and execution history. Workflow definitions come from `scripts/build-workflows.mjs`; regenerate them with `node scripts/build-workflows.mjs` and `npm run format` before reimporting. Edit that script rather than the exported JSON.
 
-If you finish setup after 10:30 in `APP_TIMEZONE`, the admin page may show `reminder-run-missing` for that day, because no scheduled run has happened yet. It stops once a day has a scheduled run. Overdue reminders run at 09:00 and hourly from 10:00 through 17:00 in `APP_TIMEZONE`. Each execution scans stable pages of 50 approved overdue loans, continuing past empty filtered pages, up to 20 pages. Callbacks recheck return status and the current business date. Concurrent runs create one row per loan and date. The calendar job records missing fetches and missing reminders once per day after 10:30, including a missing fetch when no loans are overdue. The administration page shows these recorded alerts separately from the current missing-reminder list.
+### 5. Start the application
 
-Workflow exports contain no credentials or pinned execution data. Keep directional secrets in the runtime environment. Notifications are stored in the app; no email or SMS provider is connected. The app guarantees one stored row per key. External delivery would need a provider idempotency key or an explicit at-least-once policy, because a provider can accept a message before a lost callback or a return race.
+In terminal two:
 
-## Running-service verification
+```sh
+npm run dev
+```
+
+Open `http://localhost:3000`. The signed-out page exposes only tool names and categories. Sign in to list, lend and borrow. Account provisioning is idempotent and gives every new profile the ordinary user role. Profiles store no email. The fallback display name is **Neighbor**. To show names, optionally customize Clerk session tokens with a `name` claim from the user's full name; fallback names remain supported.
+
+To run a second checkout independently, use a different `COMPOSE_PROJECT_NAME` in its `.env` for a separate Docker volume. Stop the first checkout's Next.js, Convex watcher and n8n container while using the same ports, then restart them from the first checkout afterward. Never copy `.convex` or a deployment-selection value into the second checkout.
+
+## Two users and an administrator
+
+In the development Clerk dashboard, create three users with these reserved test addresses and no password:
+
+- `lender+clerk_test@example.com`
+- `borrower+clerk_test@example.com`
+- `admin+clerk_test@example.com`
+
+Sign in through the app in three separate browser profiles or private sessions. Clerk development test addresses use code `424242`. These are reserved development addresses; no real inbox is needed. Never use them in production. Do not show codes or private configuration in recordings.
+
+Sign in once as each user so local profiles exist. In the Convex dashboard's `users` table, match each `tokenIdentifier` to its Clerk user ID, then copy the local `_id`. The dashboard URL is printed by `convex dev`. All accounts may display as Neighbor; the Clerk subject distinguishes them for this local setup.
+
+Promote only the intended admin through the internal operation:
+
+```sh
+npx convex run admin:promote '{"userId":"<admin-local-id>"}'
+```
+
+Reload that user's app. Admin promotion is unavailable to browser callers. Trusted Lender is only a badge and grants no extra permissions.
+
+Create demo data with the two ordinary local user IDs:
+
+```sh
+npx convex env set DEMO_SEED_ENABLED true
+npx convex run seed:demo '{"lenderId":"<lender-local-id>","borrowerId":"<borrower-local-id>"}'
+npx convex env remove DEMO_SEED_ENABLED
+```
+
+The internal seed refuses without the flag and accepts only two distinct existing signed-in profiles. It creates no identities and deletes nothing. It creates Community drill (overdue), Garden spade (due today), Camping tent (future), Kitchen mixer (returned) and Step ladder (available). Each is a separate physical item. Dates are relative to the first run's business date. Repeating with the same pair reuses the data and preserves changes; it does not reset dates, returns or removals. Keep the readable demo markers at the beginning of descriptions if you want reruns to recognize edited tools. Reuse the original borrower for that lender's set.
+
+Try this sequence:
+
+1. Signed out, inspect the names/categories. As borrower, open Step ladder and request today through tomorrow.
+2. As lender, open Incoming and approve. As borrower, open Notifications. In n8n Executions, inspect the successful Request notifications run. Activity on the loan shows kind/time without the message.
+3. As admin, view all loans, mark the lender trusted, and inspect the automation panel. Ordinary users cannot open it.
+4. Run overdue reminders twice. Only Community drill is overdue; one reminder row is created for that loan and business date:
+
+```sh
+docker compose exec -T -e N8N_RUNNERS_BROKER_PORT=5680 n8n n8n execute --id=LendLoopOverdue
+```
+
+Run the command again after it finishes. The separate broker port avoids colliding with the live server's runner. The CLI prints execution payloads, so keep its output off a shared screen. Borrower Notifications and the lender/admin loan activity show the reminder. Confirm return as lender; no further reminder is sent for that returned loan.
+
+## Failure replay
+
+Use a free date range and an available tool. To shorten a demonstration, temporarily set the backend's five delays:
+
+```sh
+npx convex env set AUTOMATION_BACKOFF_SECONDS 2,2,2,2,2
+docker compose stop n8n
+```
+
+Make a real request in the borrower browser. It saves even while n8n is stopped. The minute sweep retries due events. For quicker observation, run `npx convex run automation:sweep` repeatedly, waiting at least two seconds between runs. After the fifth attempt and final delay, the admin panel shows a failed notification. Restart n8n, then use its Retry button:
+
+```sh
+docker compose start n8n
+```
+
+The event keeps its identifier and eventually has one notification. Restore defaults afterward with `npx convex env remove AUTOMATION_BACKOFF_SECONDS`, or restore the previous configured value if you had one.
+
+`npm run verify` automates outages, callback failures, return races, parallel workflow runs, pagination and a deliberately failed published execution. That last case must appear in n8n Executions, trigger Workflow errors and produce an admin failure record. Use it on a dedicated local stack: it changes runtime controls temporarily and restarts n8n. It restores controls and schedules afterward. Historical alerts remain visible; they are not silently resolved or deleted. Starting after 10:30 may record a missing-run alert for that date before a fetch has occurred. A successful recovery updates the live missing-reminder count; that day's recorded alert remains history.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  Browser -->|Clerk session| Convex
+  Convex -->|transaction| Loans[Loan and durable event]
+  Loans --> Dispatch[Claim and dispatch]
+  Sweep[Minute sweep] --> Dispatch
+  Dispatch -->|signed minimal payload| A[n8n request workflow]
+  A -->|signed callback| Notes[Convex notifications]
+  B[n8n daily and hourly reminders] -->|signed overdue fetch| Convex
+  B -->|signed reminder callback| Notes
+  Errors[n8n error workflow] -->|signed failure report| Admin[Convex admin monitoring]
+```
+
+Public functions derive the actor from verified auth; browser arguments never select an actor or role. Plain domain helpers hold authorization and transition rules. A loan change, durable event and scheduled dispatch commit together. A successful webhook response only acknowledges acceptance. The signed callback atomically inserts the mock notification and settles delivery. Claims serialize dispatch/sweep races; callbacks deduplicate by event or loan/date key. A late valid callback can settle a failed event. Admin retry preserves its key.
+
+Reminders run at 09:00 and hourly 10:00 through 17:00 in `APP_TIMEZONE`. Stable pages of 50 approved overdue loans are scanned before filtering already-reminded rows, including empty filtered pages. The cap is 20 pages. Return-first skips a reminder; reminder-first leaves valid history. Clock refresh runs each minute, and checks missing fetches and reminders once daily after 10:30. Missing fetch detection works with zero overdue loans.
+
+## Security and tradeoffs
+
+Directional HMAC-SHA256 signs the exact serialized payload inside a strict string envelope. Receivers check declared and actual length up to 64 KiB, schema, purpose, five-minute timestamp window and signature length, then compare in constant time before business writes. Retries preserve keys. Workflow exports contain neither credentials nor pinned data; source scans check this.
+
+n8n receives opaque event/loan/recipient IDs, tool name, status and relevant dates. It never receives Clerk identity keys, display names, emails, descriptions or full documents. Notification text is bounded plain text. Message, recipient, loan and kind cannot be substituted by a callback. Activity exposes only kind and occurrence time to participants/admin; message text stays in the recipient's Notifications page. The app guarantees one stored row per key. External delivery needs a provider idempotency key or an explicit at-least-once policy.
+
+This local mock-data instance trusts workflow editors: Code nodes can read its environment and use Node crypto. Its ports bind to loopback, Docker reaches Convex using `host.docker.internal`, and execution data is pruned after seven days. These settings are a local development trust boundary.
+
+Dates are inclusive, so a shared boundary day conflicts. Pending requests do not reserve. Approval rechecks conflicts transactionally. Overdue tools reject new borrowing until lender-confirmed return. Borrowers cannot release a started loan alone. Removal is soft: history remains, future reservations cancel, pending requests decline, and started loans remain returnable. Availability means today; it may lag midnight by about a minute, while writes recheck the real date. Native date fields are paired with busy ranges rather than a custom calendar. Separate identical-looking listings can represent distinct physical items, so listing creation is not globally deduplicated.
+
+## Checks and recording
 
 ```sh
 npx playwright install chromium
-node --experimental-strip-types scripts/verify.ts
-```
-
-Run with Next.js, local Convex and the dedicated n8n instance already running, with development Clerk configuration in `.env.local` and Docker configuration in `.env`. This script stops and restarts n8n, changes retry delays temporarily, creates synthetic loans, and runs published workflows. Use a dedicated local deployment. It creates three temporary Clerk accounts, signs in through the browser, promotes one locally, and deletes the Clerk accounts and sessions afterward. Local profile records remain because account deletion is not implemented.
-
-Internal testing operations refuse to run unless `DEMO_SEED_ENABLED=true`. The script verifies this refusal, temporarily enables the flag, removes its fixture loans and restores the previous flag, retry delays and signing configuration. It writes ignored machine-readable results and screen captures under `test-results/`. The script exercises real parallel approval processes, delivery outages, callback failures, concurrent reminder runs, return ordering, pagination, published workflow errors, health alerts and phone/desktop keyboard navigation. It never prints private keys or session tokens.
-
-The separate Clerk token check uses the real account query and rejects modified tokens. It refuses production Clerk keys and non-loopback backends.
-
-## Security and architecture
-
-The browser uses Clerk session tokens with Convex audience. Every authenticated public operation resolves its actor from verified auth. Domain helpers take the resolved local actor ID, allowing business rules to be exercised without accepting actor or role arguments from browsers. Admin checks and ownership rules run in Convex, not just in the interface.
-
-Listing and loan reads are paginated. The public projection excludes internal IDs and all owner details. Signed-in tool detail exposes busy dates without borrowers. Removed listings use soft deletion and loans retain immutable tool-name snapshots. User text is rendered as text.
-
-The integration uses a string envelope, directional HMAC-SHA256 secrets, constant-time verification, a five-minute clock window and 64 KiB checks. Trusted n8n Code nodes can read the instance environment and Node crypto. Anyone who can edit a workflow can read its secrets. This dedicated, loopback-bound mock-data instance is not production hardening. Execution retention is seven days and internal runners emit a deprecation warning.
-
-Before production: isolate workflow runners, restrict access, use managed secrets and rotation, enable HTTPS throughout, add external monitoring, rate limits, backups and retention policies, support reminder scans beyond 1,000 overdue loans, and use a notification provider with an explicit duplicate-delivery policy.
-
-## Checks
-
-```sh
+node scripts/check-clerk.mjs
+npm run verify
 npm run typecheck
 npm run lint
 npm run format:check
 npm test
+npm run build
 npm run check:workflows
 docker compose config -q
 npm audit --audit-level=high
 ```
 
-The test suite covers verified-actor boundaries, permissions, date validation, transitions, event atomicity, soft removal, clock boundaries, signatures, delivery claims, reminder deduplication, health alerts and token contrast. CI runs it on every push, and dependencies are pinned exactly. Production compilation works with fictional public values in `.env.ci`, without a secret Clerk key or running backend.
+The Clerk check creates and deletes a development account, tests a real token and rejects a modified token. Running-service verification signs in through Chromium as two users and an admin, uses separate real CLI processes for concurrent approvals, and measures phone/desktop layout and keyboard use. Reports and screenshots go to ignored `test-results/`. Temporary Clerk accounts/sessions and fixture loans are removed afterward; local profiles and recorded failures remain. No private keys or tokens are printed. The testing wrappers require `DEMO_SEED_ENABLED=true` and are internal; the verification script temporarily enables and then restores that flag.
 
-CI uses full-SHA-pinned actions, the Node version file, `npm ci`, and a checksum-pinned Gitleaks binary scanning full history. Audit is report-only. Generated Convex types are checked in so type checks need no backend.
+CI runs type checks, accessibility lint, formatting, unit checks, production compilation, workflow/Compose validation, full-history Gitleaks and report-only dependency audit. **A green CI badge does not prove browser sign-in, running workflows, real concurrency or accessibility conformance.** Those need running services and the separate checks described in [verification](docs/verification.md). Front-end decisions and limitations are in [DECISIONS.md](DECISIONS.md).
 
-**A green badge does not cover browser sign-in, workflow executions or real concurrency.** Those need running services. Chromium sign-in, screen sizes, keyboard use and live backend checks are recorded separately in `docs/verification.md`. Running-service verification requires the dedicated development environment and is separate from CI.
+Recording requires Playwright Chromium and `ffmpeg`/`ffprobe` on PATH. With the dedicated development stack running, `node --experimental-strip-types scripts/demo.ts` records real clicks, uses real signed-in development accounts and the seed, then trims and encodes a silent captioned video. Keep private setup and sign-in out of the recorded scenes. The script uses temporary real Clerk development users and promotes its own local admin. It deletes those Clerk accounts and sessions afterward; fictional seed data remains for inspection. On an empty dedicated n8n volume it creates a local recording owner before capture and keeps credentials/session state only in ignored recording files. For an existing owner, supply `N8N_DEMO_EMAIL` and `N8N_DEMO_PASSWORD` in your ignored `.env`. Its script refuses to publish a video over 90 seconds or 10 MB.
+
+## Production note
+
+Use a real provider with idempotency keys or declare at-least-once delivery. Move secrets to managed storage with rotation, restrict n8n network access, use HTTPS, remove Code-node environment access and retained success payloads, and add rate limits and external monitoring. A stopped backend cannot report itself. Add backups, denormalized availability, scans beyond 1,000 overdue loans, environment separation, CI/CD, retention and account deletion. Decide pickup, disputes and borrower return claims before widening use. This repository does not include payments, chat, real messaging or production hosting.

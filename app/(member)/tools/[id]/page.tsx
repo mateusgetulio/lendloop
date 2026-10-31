@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { Badge, message } from "@/components/common";
+import { Badge, Band, message } from "@/components/common";
 import { formatRange, label, overlaps } from "@/lib/catalog";
 export default function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params),
@@ -22,8 +22,11 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
   if (tool === null)
     return (
       <>
-        <h1>Tool unavailable</h1>
-        <p>This listing is no longer available.</p>
+        <Band
+          eyebrow="Check another tool"
+          title="Tool unavailable"
+          lede="This listing is no longer available."
+        />
         <Link className="button" href="/tools">
           Browse tools
         </Link>

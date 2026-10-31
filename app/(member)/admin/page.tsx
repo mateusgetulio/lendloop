@@ -14,6 +14,7 @@ import {
 import type { Tool } from "@/components/tool-card";
 import { AutomationPanel } from "@/components/automation-panel";
 import { formatRange } from "@/lib/catalog";
+import { LoanActivity } from "@/components/loan-activity";
 function Administration() {
   const loans = usePaginatedQuery(api.admin.loans, {}, { initialNumItems: 10 }),
     lenders = usePaginatedQuery(api.admin.lenders, {}, { initialNumItems: 10 }),
@@ -50,6 +51,7 @@ function Administration() {
                   <th>Borrower</th>
                   <th>Dates</th>
                   <th>Status</th>
+                  <th>Activity</th>
                 </tr>
               </thead>
               <tbody>
@@ -67,6 +69,9 @@ function Administration() {
                           ? "Overdue"
                           : l.status}
                       </Badge>
+                    </td>
+                    <td data-label="Activity">
+                      <LoanActivity loanId={l._id} />
                     </td>
                   </tr>
                 ))}
