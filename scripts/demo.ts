@@ -98,7 +98,7 @@ async function scene(
   url: string,
   caption: string,
   action?: (page: Page) => Promise<void>,
-  hold = 1800,
+  hold = 3200,
 ) {
   const state =
     role === "public"
@@ -122,6 +122,10 @@ async function scene(
   await page.waitForTimeout(700);
   if (role !== "workflow")
     await page.getByRole("heading", { level: 1 }).waitFor();
+  else {
+    const close = page.locator('[data-test-id="suggested-actions-close"]');
+    if (await close.isVisible()) await close.click();
+  }
   await page.evaluate((text) => {
     const box = document.createElement("div");
     box.textContent = text;
@@ -301,7 +305,7 @@ try {
     async (page) => {
       await expect(page.locator("body")).toContainText("Succeeded");
     },
-    2500,
+    3800,
   );
   await envSet("AUTOMATION_BACKOFF_SECONDS", "1,1,1,1,1");
   await command("docker", ["compose", "stop", "n8n"]);
@@ -403,7 +407,7 @@ try {
     "http://localhost:5678/workflow/LendLoopOverdue/executions",
     "Two successful reminder runs use the same daily deduplication key.",
     undefined,
-    2200,
+    3800,
   );
   await scene(
     "borrower",
@@ -414,7 +418,7 @@ try {
         page.getByText(reminders[0].message, { exact: true }),
       ).toHaveCount(1);
     },
-    2500,
+    3800,
   );
   await writeFile("test-results/video/clips.json", JSON.stringify(clips));
   const metadata = JSON.parse(
