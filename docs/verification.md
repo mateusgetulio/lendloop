@@ -1,6 +1,6 @@
 # Verification
 
-Date: 2026-10-31. The application supports listings, borrowing, administrator controls, durable signed notification delivery, overdue reminders and automation monitoring. Running-service checks use a dedicated local development stack; CI covers offline checks only.
+Date: 2026-10-31. This records what was tested, how, and what was not. The results below come from a new clone of the public repository, set up by following the README, using its default `UTC` timezone. CI covers offline checks only.
 
 ## Environment and versions
 
@@ -21,6 +21,55 @@ Checks used Node 22.22.0 and npm 10.9.4. The lockfile is only changed with this 
 | Gitleaks                | 8.30.1                          |
 
 Browser and integration checks ran on macOS arm64, with Docker through OrbStack. The running backend and Docker timezone were set to `America/Sao_Paulo`. No production credentials were used. Linux service networking, Safari and Firefox were not exercised.
+
+## Clean clone run
+
+A new clone of the public repository was set up by following the README in order: install, environment files, local Convex, `scripts/configure.mjs`, Docker n8n on an empty volume, `scripts/n8n-setup.sh`, then Next.js. The only temporary warning was the missing issuer before configuration, which the README describes. It used a separate Docker project and a new local Convex deployment.
+
+`node scripts/check-clerk.mjs` and `npm run verify` then passed: 16 check groups with real Clerk browser sign-in, plus 48 screen measurements at 320 px and 1280 px with no sideways scrolling and no control under 44 by 44 CSS pixels. A second new clone recorded `docs/demo.mp4`, which is 45 seconds, silent and under 500 KB. The recording also checked the seed: it refuses without its flag, and a second run changes nothing.
+
+## Acceptance scenarios
+
+"Automated" means Vitest in CI. "Running stack" means `npm run verify` against real Clerk, Convex and n8n.
+
+| #   | Scenario                                                                                                                                 | How it was checked                        | Result                     |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | -------------------------- |
+| 1   | The signed-out page shows branding, tagline, sign-in, and only tool names and categories                                                 | Running stack, demo recording             | Pass                       |
+| 2   | Each item in the public response is exactly a name and a category                                                                        | Automated                                 | Pass                       |
+| 3   | A user can create, edit and delete their own listing, and invalid input is rejected                                                      | Automated, running stack by keyboard      | Pass                       |
+| 4   | Calling another user's functions directly is rejected                                                                                    | Automated                                 | Pass                       |
+| 5   | Own tool, past date, duplicate request, overlap with an approved loan and a tool with an overdue loan are rejected with no loan or event | Automated                                 | Pass                       |
+| 6   | Two parallel approvals of overlapping requests: exactly one succeeds                                                                     | Running stack, separate backend processes | Pass                       |
+| 7   | Every illegal transition and repeat is rejected or does nothing, with no extra event                                                     | Automated                                 | Pass                       |
+| 8   | Personal views and the category filter show the right records, with clear empty states                                                   | Automated, running stack                  | Pass                       |
+| 9   | An admin can remove any listing, view all loans and toggle Trusted Lender, and a user cannot                                             | Automated, running stack                  | Pass                       |
+| 10  | An owner cannot delete a listing with a started loan                                                                                     | Automated                                 | Pass                       |
+| 11  | Admin removal with a started loan succeeds, the loan stays returnable, pending requests are declined and future loans cancelled          | Automated                                 | Pass                       |
+| 12  | Crossing midnight, in a non-UTC timezone and across daylight saving, updates availability with no loan write                             | Automated                                 | Pass                       |
+| 13  | Each transition delivers the right notification to the right person through n8n                                                          | Running stack, demo recording             | Pass                       |
+| 14  | Tampered payload, wrong purpose and stale timestamp are rejected in both directions with no side effect                                  | Running stack                             | Pass                       |
+| 15  | Unicode and escaped newlines verify, extra outer fields are rejected, and a substituted recipient has no effect                          | Running stack                             | Pass                       |
+| 16  | Replayed webhooks and callbacks, and two reminder runs at once, leave one row per key                                                    | Running stack, demo recording             | Pass                       |
+| 17  | With overdue, due today, future and returned loans, only the overdue one gets one reminder                                               | Running stack                             | Pass                       |
+| 18  | With n8n stopped, a request saves, retries run, the failure shows in admin, and admin retry delivers after restart                       | Running stack, demo recording             | Pass                       |
+| 19  | n8n accepts a request but its callback fails: the event stays pending and is delivered once later                                        | Running stack                             | Pass                       |
+| 20  | With no callback after the fifth attempt, the event fails after the final delay, and a late valid callback settles it once               | Automated, running stack                  | Pass                       |
+| 21  | Dispatch and sweep racing use one attempt, and delivered state is never overwritten                                                      | Automated, running stack                  | Pass                       |
+| 22  | After a partial reminder failure, the next run sends only what is missing and the failure is reported                                    | Running stack                             | Pass                       |
+| 23  | Several pages, already-sent loans and an empty filtered page skip no candidate, and the page cap reports a failure                       | Running stack                             | Pass                       |
+| 24  | With workflow B disabled and nothing overdue, `reminder-run-missing` appears in admin                                                    | Automated, running stack                  | Pass                       |
+| 25  | A return racing a reminder is correct in both commit orders                                                                              | Automated, running stack                  | Pass                       |
+| 26  | An approval delivered before its request event keeps both, in order of occurrence, with the right status                                 | Automated, running stack                  | Pass                       |
+| 27  | Source and workflow exports contain no secrets or real personal data                                                                     | Running stack, Gitleaks in CI             | Pass                       |
+| 28  | A fresh clone following the README runs the app and three workflows with no undocumented step                                            | New clone, described above                | Pass, with the limit below |
+| 29  | A failure in a published workflow reaches the error workflow and shows in admin                                                          | Running stack                             | Pass                       |
+
+Limits on these results:
+
+- **Fresh clone:** the Clerk dashboard steps used an already configured development app, and the n8n owner screen and sign-ins were driven by Chromium, not by a person.
+- **Schedules:** the 09:00 and hourly reminder schedules were not observed firing on their own. Reminder runs were triggered directly. The 10:30 health check did fire on the real clock, recording `reminder-run-missing` on a stack with no scheduled run yet.
+- **Not tested:** Linux service networking, Safari, Firefox, a physical iPhone, screen readers and usability testing with real people.
+- **Names:** every account shows as `Neighbor`. The optional Clerk name claim in the README has not been tested.
 
 ## Core backend checks
 
@@ -50,7 +99,7 @@ The automated suite exercises public functions through authenticated test identi
 | Calendar refresh changes availability without modifying loans                                                                                     | Pass   |
 | Non-UTC midnight and daylight-saving boundaries use the configured timezone                                                                       | Pass   |
 
-`npm test` passed 112 checks: the existing 94 core and contrast checks plus 18 delivery, signature, reminder, authorization and health checks. CI runs this on every push.
+`npm test` passed 117 checks in four suites: core rules, automation, demo data and color contrast. CI runs this on every push.
 
 ## Real Clerk authentication
 
@@ -155,12 +204,12 @@ The application persists notifications only. It does not send email or SMS. Work
 
 ## Quality and limitations
 
-The current tree passed type checking, ESLint, all 112 unit checks, production compilation and workflow structure validation using Node 22.22.0 and npm 10.9.4. No dependency versions or lockfile were changed. Playwright remains because the committed browser verification imports it.
+The final tree passed type checking, ESLint, formatting, all 117 unit checks, production compilation and workflow structure validation using Node 22.22.0 and npm 10.9.4. Playwright stays because the committed verification and recording scripts use it.
 
 Gitleaks passed over the full Git history. Running-service verification searches proposed source files and workflow exports for the actual private environment values without printing them. Environment files, screenshots and execution reports remain ignored. Dependency audit returned 14 moderate lint-tool advisories and no high findings; no automatic dependency changes were applied.
 
-A clean Linux container ran dependency installation, type checking, lint, formatting, unit checks and production compilation with fictional public configuration. Running-service checks are on macOS arm64 with OrbStack and Chromium. Linux service networking, Safari, Firefox, physical iOS date controls, screen-reader output, zoom and forced colors remain unverified. No production credentials were used.
+CI runs dependency installation, type checking, lint, formatting, unit checks and production compilation on Linux with fictional public configuration. Running-service checks ran on macOS arm64 with OrbStack and Chromium.
 
 Duplicate detection covers overlapping borrow requests. Separate identical-looking listings can represent distinct physical items and are not deduplicated; the form prevents in-flight repeat submissions. No general create-listing idempotency guarantee is claimed.
 
-A repeatable demonstration seed, activity history, a complete fresh-clone walkthrough and production hosting are not implemented or claimed. Accessibility measurements and keyboard automation are not a usability study or a complete conformance assessment. A green CI badge alone does not prove browser authentication or running-service behavior.
+Production hosting is not implemented or claimed. Accessibility measurements and keyboard automation are not a usability study or a complete conformance assessment. A green CI badge alone does not prove browser authentication or running-service behavior.

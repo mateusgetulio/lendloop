@@ -12,7 +12,7 @@ A neighborhood tool-lending board built with Next.js, Clerk, Convex and n8n. Bor
 
 You need Node 22.22.0, npm 10.9.4, Docker Compose and a Clerk development application. The complete first run is: install, configure Clerk and the two environment files, start local Convex, configure its environment, start/import n8n, then start Next.js. Follow the numbered setup below in order. No Convex account is required.
 
-The silent [demo](docs/demo.mp4) shows a request and approval, its notification execution, an unavailable workflow service recovered by admin retry, and one overdue reminder after two workflow runs. It shows mock delivery inside the app, with no external email or SMS delivery.
+The 45-second silent [demo video](docs/demo.mp4) shows a request and approval, its notification execution, an unavailable workflow service recovered by admin retry, and one overdue reminder after two workflow runs. It shows mock delivery inside the app, with no external email or SMS delivery.
 
 ## Setup
 
@@ -114,7 +114,7 @@ In the development Clerk dashboard, create three users with these reserved test 
 
 Sign in through the app in three separate browser profiles or private sessions. Clerk development test addresses use code `424242`. These are reserved development addresses; no real inbox is needed. Never use them in production. Do not show codes or private configuration in recordings.
 
-Sign in once as each user so local profiles exist. In the Convex dashboard's `users` table, match each `tokenIdentifier` to its Clerk user ID, then copy the local `_id`. The dashboard URL is printed by `convex dev`. All accounts may display as Neighbor; the Clerk subject distinguishes them for this local setup.
+Sign in once as each user so local profiles exist. List the profiles with `npx convex data users --format json`, match each `tokenIdentifier` to its Clerk user ID from the Clerk dashboard, then copy the local `_id`. All accounts may display as Neighbor; the Clerk subject distinguishes them for this local setup.
 
 Promote only the intended admin through the internal operation:
 
