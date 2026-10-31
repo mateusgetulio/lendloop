@@ -4,21 +4,21 @@ Date: 2026-10-31. Scope: the foundation build and integration proof only. No pro
 
 ## Runtime versions
 
-| Component            | Version                    |
-| -------------------- | -------------------------- |
-| Node                 | 22.22.0, matching `.nvmrc` |
-| Next.js              | 16.4.3                     |
-| React / React DOM    | 19.2.3                     |
-| TypeScript           | 5.9.3                      |
-| Convex client/CLI    | 1.49.0                     |
-| Clerk Next.js SDK    | 7.9.23                     |
-| n8n Docker image     | `n8nio/n8n:2.45.7`         |
-| Vitest / Vite        | 5.0.5 / 8.3.5              |
-| Prettier             | 3.9.10                     |
-| ESLint               | 9.39.5                     |
-| Local secret scanner | Gitleaks 8.30.1            |
+| Component            | Version                         |
+| -------------------- | ------------------------------- |
+| Node / npm           | 22.22.0 / 10.9.4, from `.nvmrc` |
+| Next.js              | 16.4.3                          |
+| React / React DOM    | 19.2.3                          |
+| TypeScript           | 5.9.3                           |
+| Convex client/CLI    | 1.49.0                          |
+| Clerk Next.js SDK    | 7.9.23                          |
+| n8n Docker image     | `n8nio/n8n:2.45.7`              |
+| Vitest / Vite        | 5.0.5 / 8.3.5                   |
+| Prettier             | 3.9.10                          |
+| ESLint               | 9.39.5                          |
+| Local secret scanner | Gitleaks 8.30.1                 |
 
-Tested on macOS arm64 with Docker running through OrbStack. Linux networking is configured but has not been independently exercised. Package versions are locked by `package-lock.json`.
+Integration checks ran on macOS arm64 with Docker through OrbStack. The install, type check, lint, format, test, build and audit steps also ran in a clean `node:22.22.0` Linux container using npm 10.9.4. The first CI run failed at `npm ci` because the lockfile had been generated with a different npm, so it was regenerated with this version. Change the lockfile only with the Node and npm from `.nvmrc`. Linux networking for n8n is configured but has not been exercised. Package versions are locked by `package-lock.json`.
 
 ## Integration checks
 
