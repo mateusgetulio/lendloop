@@ -1,114 +1,133 @@
 # Verification
 
-Date: 2026-10-31. Scope: the foundation build and integration proof only. No product tables, listings, loans, role management, notification persistence, or reminder scheduling have been implemented.
+Date: 2026-10-31. The application now supports tool listings, borrowing requests, ownership rules, administrator controls and calendar refresh. Automation events are recorded atomically, but dispatch, notification persistence, reminders and automation monitoring are not implemented.
 
-## Runtime versions
+## Environment and versions
 
-| Component            | Version                         |
-| -------------------- | ------------------------------- |
-| Node / npm           | 22.22.0 / 10.9.4, from `.nvmrc` |
-| Next.js              | 16.4.3                          |
-| React / React DOM    | 19.2.3                          |
-| TypeScript           | 5.9.3                           |
-| Convex client/CLI    | 1.49.0                          |
-| Clerk Next.js SDK    | 7.9.23                          |
-| n8n Docker image     | `n8nio/n8n:2.45.7`              |
-| Vitest / Vite        | 5.0.5 / 8.3.5                   |
-| Prettier             | 3.9.10                          |
-| ESLint               | 9.39.5                          |
-| Local secret scanner | Gitleaks 8.30.1                 |
+Checks used Node 22.22.0 and npm 10.9.4. The lockfile is only changed with this exact pair.
 
-Integration checks ran on macOS arm64 with Docker through OrbStack. The install, type check, lint, format, test, build and audit steps also ran in a clean `node:22.22.0` Linux container using npm 10.9.4. The first CI run failed at `npm ci` because the lockfile had been generated with a different npm, so it was regenerated with this version. Change the lockfile only with the Node and npm from `.nvmrc`. Linux networking for n8n is configured but has not been exercised. Package versions are locked by `package-lock.json`.
+| Component               | Version                         |
+| ----------------------- | ------------------------------- |
+| Next.js                 | 16.4.3                          |
+| React / React DOM       | 19.2.3                          |
+| TypeScript              | 5.9.3                           |
+| Convex client/CLI       | 1.49.0                          |
+| Clerk Next.js SDK       | 7.9.23                          |
+| n8n image               | `n8nio/n8n:2.45.7`              |
+| Vitest / Vite           | 5.0.5 / 8.3.5                   |
+| Convex test harness     | 0.0.66                          |
+| Playwright test tooling | 1.64.1                          |
+| Chromium                | Chrome for Testing 156.0.8078.4 |
+| Gitleaks                | 8.30.1                          |
 
-## Integration checks
+Browser and integration checks ran on macOS arm64, with Docker through OrbStack. The running backend and Docker timezone were set to `America/Sao_Paulo`. No production credentials were used. Linux service networking, Safari and Firefox were not exercised.
 
-| Check                                                                               | Result                   | Evidence and interpretation                                                                                                                                                                                                                                                                                                        |
-| ----------------------------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| n8n Code nodes can read directional secrets                                         | PASS                     | The published notification workflow verified a request using its environment secret, then signed a callback with the independent reverse-direction secret. No secret values were embedded in the exported workflows.                                                                                                               |
-| n8n can calculate HMAC and compare signatures in constant time                      | PASS                     | `require('crypto')`, HMAC-SHA256, and `timingSafeEqual` executed successfully in the internal JavaScript task runner. Tampered signatures were rejected.                                                                                                                                                                           |
-| The signed string envelope survives webhook parsing                                 | PASS                     | A message containing an accented character, an emoji and an escaped newline completed the round trip unchanged. The receiver used `body.payload` directly; no raw-body fallback was needed.                                                                                                                                        |
-| An invalid signature returns unauthorized before later processing                   | PASS                     | Invalid requests returned HTTP 401. Execution records showed only Webhook → Verify → Valid → Reject, with neither Sign callback nor Callback executed. Extra outer fields returned HTTP 400.                                                                                                                                       |
-| Convex HTTP actions can verify HMAC with Web Crypto                                 | PASS                     | The actual HTTP action verified the n8n callback through `crypto.subtle.verify`. Tampered signatures, expired timestamps and wrong endpoint purposes were rejected. No Node-action fallback was required.                                                                                                                          |
-| Local Convex supports environment configuration and real Clerk authentication       | PASS                     | Backend environment updates succeeded. A real Clerk-issued development session token authenticated through `ConvexHttpClient` against the local backend. An anonymous request had no identity; a modified token was rejected. HTTP actions were exercised on port 3211.                                                            |
-| Docker n8n and local Convex can reach each other                                    | PASS                     | `npx convex run spike:roundTrip` originated a signed request in the backend, reached the published n8n webhook through host loopback, and received its verified callback through Docker's host gateway. No cloud or tunnel fallback was used.                                                                                      |
-| Workflows can be imported, published and invoke an error workflow on a real failure | PASS                     | Three fixed-ID workflows imported successfully. Notification and error probes published through the CLI and loaded after restarting n8n. An intentional failure in a production webhook execution triggered a successful error workflow and a verified `failure-report` callback. No manual reference-mapping fallback was needed. |
-| Clerk identity has a usable display-name strategy                                   | PASS WITH NAMED FALLBACK | The temporary test user had no profile name. The authenticated query returned `hasUsableName: false` and `displayNameFallback: "Neighbor"`. This proves the fallback; it does not claim a positive profile-name claim was observed.                                                                                                |
+## Core backend checks
 
-The local backend used the primary deployment approach. The only named fallback used was the `Neighbor` display name.
+The automated suite exercises public functions through authenticated test identities and accesses stored records to confirm transaction outcomes. It does not claim to reproduce real transaction-conflict scheduling.
 
-## Real Clerk-token test
+| Check                                                                                                                                             | Result |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| New account provisioning uses the verified identity, defaults to user, provides a name fallback and is idempotent                                 | Pass   |
+| Anonymous requests cannot invoke authenticated reads or writes                                                                                    | Pass   |
+| A caller cannot supply another actor, owner or role through public arguments                                                                      | Pass   |
+| Foreign listing edits/deletion and unrelated loan actions are rejected on the backend                                                             | Pass   |
+| Administrators cannot edit someone else's listing or approve someone else's loan merely because of their role                                     | Pass   |
+| Personal listings, borrowing and incoming queries isolate records by participant                                                                  | Pass   |
+| Ordinary users cannot invoke admin loan views, user views or trust toggles                                                                        | Pass   |
+| Name, description, category, condition and calendar-date inputs are validated                                                                     | Pass   |
+| Borrowing one's own tool, invalid/past dates, duplicate requests, approved-date overlap and overdue tools are rejected without extra loans/events | Pass   |
+| Overlapping pending requests coexist, but conflicting approval fails                                                                              | Pass   |
+| Request creation and successful transitions write one pending event with the correct recipient and immutable name snapshot                        | Pass   |
+| Repeated completed transitions write no additional event                                                                                          | Pass   |
+| Every owner transition/status combination either succeeds, safely repeats or rejects without an unintended event                                  | Pass   |
+| Borrower cancellation and lender confirmation obey status and date restrictions                                                                   | Pass   |
+| Owners cannot remove a listing with a started loan                                                                                                | Pass   |
+| Admin removal preserves a started loan, cancels future reservations, declines pending requests and preserves return access                        | Pass   |
+| Public results contain exactly name/category and omit occupied/overdue/removed tools                                                              | Pass   |
+| Tool details reveal at most 50 ordered approved date ranges, disclose truncation, and omit borrower identity                                      | Pass   |
+| Missing calendar state produces no invented public availability                                                                                   | Pass   |
+| Calendar refresh changes availability without modifying loans                                                                                     | Pass   |
+| Non-UTC midnight and daylight-saving boundaries use the configured timezone                                                                       | Pass   |
 
-A Clerk development app is configured in `.env.local`. Its issuer was set separately on the local Convex deployment; frontend environment files alone do not configure backend authentication.
+`npm test` passed 82 checks: 66 core checks and 16 contrast checks. CI runs this on every push.
 
-`node scripts/check-clerk.mjs` performed the following checks:
+## Real Clerk authentication
 
-1. Called the identity query anonymously and observed `authenticated: false`.
-2. Created a uniquely named temporary development test user and an active development session through the Clerk Backend API.
-3. Obtained a real short-lived session JWT from Clerk and submitted it directly to local Convex.
-4. Observed `authenticated: true` and the `Neighbor` name fallback.
-5. Changed a byte of the token signature and confirmed it could not authenticate.
-6. Deleted the temporary Clerk user and its associated sessions in a cleanup block.
+`node scripts/check-clerk.mjs` now uses `users:current` and `users:ensureCurrent`.
 
-The successful run exited zero. The secret key, JWT, user identifier and email were not printed or saved in this document. The probe refuses production Clerk keys and non-loopback Convex URLs.
+The live check confirmed anonymous access has no identity, a real Clerk-issued session token authenticates with the configured audience, a local profile is provisioned with a display name, and a modified token does not authenticate. Its temporary Clerk account and sessions were deleted. Local synthetic profile records remain because account deletion is outside the implemented functionality.
 
-An initial attempt to request a legacy token template named `convex` returned HTTP 404. The configured integration uses ordinary session tokens with the Convex audience instead. The probe was corrected to use the session-token endpoint, matching the current integration path supported by the installed Convex Clerk provider. No app configuration, authentication audience or provider was weakened to make the test pass. Temporary users from unsuccessful attempts were also deleted.
+Separately, real Chromium contexts signed in through Clerk's email-code interface as two ordinary accounts and one account promoted through the internal administrator operation. Test email addresses used Clerk's reserved development-code behavior. A Clerk testing token was used only to avoid bot challenges; it did not replace the email-code sign-in flow. Keys and session tokens were never printed.
 
-This is a real issuer/signature/audience validation test, not an impersonated actor or mocked JWT. It does not claim a browser sign-in walkthrough, role authorization, or product provisioning has been completed.
+## Live browser behavior
 
-## Signed workflow execution checks
+The following flows passed against the actual backend through Chromium:
 
-Commands executed with Docker n8n and local Convex running:
+- Create a listing, edit it, and save it with text preserved.
+- Borrow as another signed-in user, approve as the lender, and confirm return.
+- Open each personal view and confirm the expected request and listing records.
+- Filter categories, recover from an empty result, and use Back with the filter retained in the URL.
+- Open the administrator view, see all loans, change the actual lender's Trusted Lender status, and see its badge as the borrower.
+- Refuse owner deletion while a started loan exists.
+- Remove that listing as an administrator, decline its pending request, cancel its future approved reservation, and confirm return of its preserved started loan.
+- Create and delete an ordinary listing through keyboard-operated controls and confirmation.
+- Open a confirmation with Enter and cancel it with Escape without performing the destructive action.
+- Sign in through the email-code interface at 320 px using keyboard actions.
 
-```sh
-node scripts/spike.mjs
-npx convex run spike:roundTrip
-node scripts/spike.mjs --force-error
+A further live backend check used tokens from the browser sessions to call public functions directly. Foreign edits/removals, admin edits of foreign listings, borrower and unrelated-admin approval, ordinary access to all loans, attempted client promotion and actor injection were rejected. Its synthetic listing was removed by its owner.
+
+## Public response inspection
+
+A raw anonymous `tools:listPublicAvailable` response was captured while a returned tool was publicly available. Its page was exactly:
+
+```json
+[{ "category": "power_tools", "name": "Neighborhood drill" }]
 ```
 
-Valid delivery kept Unicode and newlines exact. Both receivers returned 401 for a zero signature, a malformed signature, a changed payload with its original signature, a wrong purpose, the other direction's secret, and timestamps ten minutes old or ahead. Both returned 400 for an extra envelope field and 413 for a body over 64 KiB. The backend-originated round trip returned `verified: true` and the original message.
+Each object's sorted keys were asserted equal to `category` and `name`. No owner, local document identifier, description, condition, dates or loan records were present. The full response also carries an opaque pagination cursor.
 
-The deliberate error command returned HTTP 500 as expected. Inspection of n8n execution records showed a failed notification execution ending in Sign callback, followed by a successful error execution containing Error Trigger → Sign failure → Report failure. Convex logged `M1 verified failure-report`. Earlier attempts made before backend HTTP actions compiled failed as expected and remain distinguishable from the successful execution.
+## Screen and keyboard checks
 
-These are temporary integration probes. They validate transport and rejection paths, not product idempotency or the full production event schema. The overdue file is an inactive structural fixture; it sends no reminders. The final workflow files were exported from the actual n8n instance, stripped of instance-history metadata and `pinData`, and checked for credential values.
+Every destination was opened at 320 px and 1280 px as both ordinary accounts and the administrator: public landing page, catalog, tool detail/request form, listings, borrowing requests, incoming requests, and administrator access or its denied state. New-listing forms were also checked at both widths. This covered 42 destination renders plus form and sign-in checks.
 
-## Local quality and CI-equivalent checks
+Measurements found no horizontal document overflow, no app control smaller than 44 by 44 CSS pixels, and no screen with more than one primary action. Inline prose links are exempt from target-size measurement, matching the documented decision. Card-heading links and third-party sign-in controls were enlarged when measurements found smaller targets.
 
-| Check                                                                                                        | Result                                                                                  |
-| ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| Clean source copy with only public CI configuration, then `npm ci`                                           | PASS                                                                                    |
-| TypeScript check, `npm run typecheck`                                                                        | PASS                                                                                    |
-| ESLint including recommended accessibility rules, `npm run lint`                                             | PASS                                                                                    |
-| Formatting, `npm run format:check`                                                                           | PASS                                                                                    |
-| Design-token contrast, `npm test`                                                                            | PASS: 13 checks across all documented text, button, border, focus and badge color pairs |
-| Production compilation, `npm run build` with fictional public Clerk configuration and placeholder Convex URL | PASS: no Clerk secret or running backend required                                       |
-| Workflow JSON/IDs/error references/secret patterns/pinned image, `npm run check:workflows`                   | PASS                                                                                    |
-| Compose interpolation and structure, `docker compose config -q`                                              | PASS                                                                                    |
-| Dependency audit, `npm audit --audit-level=high`                                                             | PASS at the requested threshold; 14 moderate findings remain in lint-tool dependencies  |
-| Gitleaks scan of proposed repository files, including untracked source                                       | PASS, no leaks; exact fictional public CI key has a narrow allowlist                    |
-| `DECISIONS.md` matches its source document                                                                   | PASS, unchanged                                                                         |
-| Secret values from local environment files searched for in every committed file                              | PASS: no matches                                                                        |
+Keyboard traversal was exercised on every destination at both widths. A separate phone-width run checked 40 Tab positions per destination/account combination and found no focused control obscured by the fixed bottom navigation. Scroll padding and control scroll margins reserve room for it. Editing, form submission, request approval, return, removal, category navigation and dialog cancellation were exercised with keyboard actions. This is browser automation, not a screen-reader evaluation or a usability study.
 
-The first test-runner versions tried had critical advisories, so they were replaced with the pinned Vitest and Vite versions above. TypeScript is pinned to a version supported by the installed lint toolchain. The remaining audit findings are reported rather than suppressed or bypassed with forced major dependency downgrades.
+Screenshots were captured and inspected for phone catalog, date form, listing form, administration and sign-in, plus desktop catalog, listing form and administration. The layout uses one/two/three catalog columns, a capped page width, stacked admin rows at phone width, persistent phone navigation, native dates, visible labels, text statuses, local field errors, status announcements, system fonts and the documented color palette.
 
-The clean-copy run checked the offline pipeline, not a full-product fresh clone. Generated Convex types are committed so type checks need no backend. Actions in CI are pinned to full commit SHAs, the Gitleaks download is pinned by checksum, Node comes from `.nvmrc`, and the secret scan covers the full git history.
+No unresolved mismatch with the documented app layout or target-size decisions was observed in these checks. Physical iOS date-input behavior, zoom, screen-reader announcements, forced-colors mode and real usability testing remain unverified. Clerk retains its own functional icons and provider branding inside its sign-in component; the app itself adds no decorative icons or emoji.
 
-Hosted CI results are in the repository's Actions tab. A green run does not cover anything that needs Clerk, Convex and n8n running.
+## Real-use checks
 
-## Boundaries and remaining work
+These came from walking through the app as each person, on top of the automated checks:
 
-- The product UI does not exist yet, so the decisions in `DECISIONS.md` have not been checked against real screens. Only the identity check and shared design tokens exist.
-- Sign-in has been tested with a real Clerk session token, but not yet by clicking through it in a browser.
-- No complete product acceptance case is claimed. Signing and real error-workflow portions have been demonstrated, but durable notification insertion, participant routing, idempotency, admin failure visibility, loan races and daily reminders remain unimplemented.
-- The dedicated n8n instance allows environment access to trusted workflow editors. Its internal JavaScript runner is suitable only for this isolated mock-data proof. Startup warns about deprecated internal mode and a missing Python runner; no Python workflows exist.
-- The HTTP probes check size, envelope shape, signatures and minimal spike payloads. They are not a finished production validation or replay-deduplication layer.
-- Secrets stay in ignored environment/runtime files. Cached tooling and generated inspection artifacts stay under ignored `.cache/`.
+- Leaving an empty field alone shows no error. Submitting shows both date errors, and a filled-in invalid field shows its error on leaving it.
+- A lender sees who is asking, and a borrower sees who is lending.
+- The admin loan table shows lender and borrower, and marks overdue loans as Overdue.
+- Accounts with the same `Neighbor` name can be told apart by their active tools, with no internal IDs on screen.
+- A malformed tool link shows "Tool unavailable" instead of an error page.
+- Escape closes the More menu.
 
-## Reference documentation used
+All accounts in these checks showed as `Neighbor`, because Clerk session tokens carry no name by default. Adding a name claim is documented in the README but has not been tested.
 
-Runtime checks above are the evidence. Documentation informed setup and test access:
+## Timezone checks
 
-- [Convex local development](https://docs.convex.dev/cli/local-deployments)
-- [Convex with Clerk](https://docs.convex.dev/auth/clerk)
-- [Clerk with Convex](https://clerk.com/docs/guides/development/integrations/databases/convex)
-- [Clerk testing and real session tokens](https://clerk.com/docs/guides/development/testing/overview)
-- [n8n task runners and their trust boundary](https://docs.n8n.io/hosting/configuration/task-runners/)
+The actual backend ran with `APP_TIMEZONE=America/Sao_Paulo`. Its settings query supplied that timezone to the request form. Requests and transitions completed successfully under it. Automated checks crossed the local midnight boundary and the New York daylight-saving fallback boundary with controlled clocks. Calendar state and public availability updated without a loan write. The clock job runs each minute and only changes the stored day when necessary. Health checking is not implemented.
+
+## Integration proof
+
+The signed round-trip action, HTTP probes and nine rejection cases per receiver are still temporary. The signing checks and the round trip started from inside Convex were run again after the product changes.
+
+These probes do not dispatch pending events or create product notifications. They remain temporary integration code. The overdue export is inactive. Workflow exports contain neither `pinData` nor credential values.
+
+## Quality and limitations
+
+A clean Linux container passed `npm ci`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run build` and `npm run check:workflows` using Node 22.22.0/npm 10.9.4 and only `.env.ci` values. Compose validation passed separately. Production compilation passes with fictional public Clerk configuration and a placeholder backend URL, without a secret key. Dependency audit reports moderate lint-tool findings; it is not a production security guarantee.
+
+Gitleaks passed on the full Git history. Local environment secret values were also searched for in every committed file, without printing them. Runtime environment files remain ignored.
+
+Duplicate detection covers overlapping borrow requests. Separate identical-looking listings can represent distinct physical items and are not deduplicated; the form prevents in-flight repeat submissions. No general create-listing idempotency guarantee is claimed.
+
+Not claimed: real concurrent approvals, durable notification delivery, reminders, automation error visibility in the admin UI, a repeatable seed, a full fresh-clone walkthrough, production hosting, or complete accessibility conformance. These require additional implementation or separate verification. A green CI badge alone does not cover browser authentication or running-service behavior.

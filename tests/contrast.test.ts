@@ -27,6 +27,9 @@ const pairs: [string, string, string, number][] = [
   ["danger badge", c.dangerText, c.dangerBackground, 4.5],
   ["neutral", c.neutralText, c.neutralBackground, 4.5],
   ["info", c.infoText, c.infoBackground, 4.5],
+  ["selected filter", c.primary, c.successBackground, 4.5],
+  ["error text", c.danger, c.page, 4.5],
+  ["danger hover", c.white, c.dangerText, 4.5],
 ];
 describe("DECISIONS.md contrast thresholds", () => {
   it.each(pairs)("%s meets contrast", (_name, fg, bg, minimum) => {

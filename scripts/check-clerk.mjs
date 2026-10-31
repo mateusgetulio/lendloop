@@ -12,7 +12,7 @@ assert(
   url && ["localhost", "127.0.0.1"].includes(new URL(url).hostname),
   "This check is for local Convex only",
 );
-const identity = makeFunctionReference("spike:identity");
+const identity = makeFunctionReference("users:current");
 let stage = "setup";
 async function clerk(path, method = "POST", body = {}) {
   const response = await fetch(`https://api.clerk.com/v1${path}`, {
@@ -50,15 +50,14 @@ try {
   assert.equal(typeof jwt, "string");
   const client = new ConvexHttpClient(url, { logger: false });
   client.setAuth(jwt);
+  await client.mutation(makeFunctionReference("users:ensureCurrent"), {});
   const result = await client.query(identity, {});
   assert.equal(result.authenticated, true);
-  assert(["provided", "Neighbor"].includes(result.displayNameFallback));
+  assert.equal(typeof result.user?.displayName, "string");
   console.log(
     "PASS: real Clerk-issued session token with Convex audience authenticates against local Convex",
   );
-  console.log(
-    `PASS: name handling returns ${result.displayNameFallback === "provided" ? "a usable-name indicator" : "Neighbor fallback"} (no identity details printed)`,
-  );
+  console.log("PASS: authenticated profile is provisioned with a display name");
   const pieces = jwt.split(".");
   const signature = Buffer.from(pieces[2], "base64url");
   signature[0] ^= 1;

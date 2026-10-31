@@ -1,17 +1,4 @@
-import { internalAction, query } from "./_generated/server";
-
-// Temporary identity check: returns no identity details.
-export const identity = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    return {
-      authenticated: identity !== null,
-      hasUsableName: Boolean(identity?.name?.trim()),
-      displayNameFallback: identity?.name?.trim() ? "provided" : "Neighbor",
-    };
-  },
-});
+import { internalAction } from "./_generated/server";
 
 // Temporary action: proves the backend itself can reach Docker n8n.
 export const roundTrip = internalAction({
@@ -23,7 +10,7 @@ export const roundTrip = internalAction({
     const timestamp = String(Math.floor(Date.now() / 1000));
     const payload = JSON.stringify({
       spike: true,
-      message: "Neighborhood café 🔧\nsecond line",
+      message: "Neighborhood café tool\nsecond line",
     });
     const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(

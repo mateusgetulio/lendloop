@@ -8,8 +8,18 @@
  * @module
  */
 
+import type * as admin from "../admin.js";
+import type * as clock from "../clock.js";
+import type * as crons from "../crons.js";
 import type * as http from "../http.js";
+import type * as lib_auth from "../lib/auth.js";
+import type * as lib_dates from "../lib/dates.js";
+import type * as lib_domain from "../lib/domain.js";
+import type * as lib_validators from "../lib/validators.js";
+import type * as loans from "../loans.js";
 import type * as spike from "../spike.js";
+import type * as tools from "../tools.js";
+import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -18,8 +28,18 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  admin: typeof admin;
+  clock: typeof clock;
+  crons: typeof crons;
   http: typeof http;
+  "lib/auth": typeof lib_auth;
+  "lib/dates": typeof lib_dates;
+  "lib/domain": typeof lib_domain;
+  "lib/validators": typeof lib_validators;
+  loans: typeof loans;
   spike: typeof spike;
+  tools: typeof tools;
+  users: typeof users;
 }>;
 
 /**

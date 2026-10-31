@@ -9,7 +9,7 @@ const env = Object.fromEntries(
     .filter((l) => l.includes("="))
     .map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]),
 );
-const unicode = "Neighborhood café 🔧\nsecond line";
+const unicode = "Neighborhood café tool\nsecond line";
 const value = { spike: true, message: unicode };
 
 function sign(secret, timestamp, purpose, payload) {
