@@ -1,10 +1,11 @@
 {
-  "id": "LendLoopNotifyM1",
-  "name": "Foundation probe: signed round trip",
+  "id": "LendLoopNotify",
+  "name": "Request notifications",
+  "active": false,
   "nodes": [
     {
-      "id": "Webhook",
-      "name": "Webhook",
+      "id": "Request-webhook",
+      "name": "Request webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [0, 0],
@@ -12,23 +13,25 @@
         "httpMethod": "POST",
         "path": "lendloop-notify",
         "responseMode": "responseNode",
-        "options": {}
+        "options": {
+          "rawBody": true
+        }
       },
-      "webhookId": "lendloop-notify-m1"
+      "webhookId": "lendloop-notify"
     },
     {
-      "id": "Verify",
-      "name": "Verify",
+      "id": "Verify-signature",
+      "name": "Verify signature",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [200, 0],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst input = $input.first().json;\nconst headers = input.headers || {};\nconst body = input.body;\nconst timestamp = headers['x-lendloop-timestamp'];\nconst signature = headers['x-lendloop-signature'];\nfunction reject(status) { return [{json:{valid:false,status}}]; }\nif (Number(headers['content-length'] || 0) > 65536 || Buffer.byteLength(JSON.stringify(body || {}),'utf8') > 65536) return reject(413);\nif (!body || Object.keys(body).length !== 1 || typeof body.payload !== 'string') return reject(400);\nif (!/^\\d+$/.test(timestamp || '') || Math.abs(Date.now()/1000 - Number(timestamp)) > 300 || !/^v1=[a-f0-9]{64}$/.test(signature || '')) return reject(401);\nconst expected = crypto.createHmac('sha256',$env.CONVEX_TO_N8N_SECRET).update(`v1\\n${timestamp}\\nnotify\\n${body.payload}`,'utf8').digest();\nif (!crypto.timingSafeEqual(expected, Buffer.from(signature.slice(3),'hex'))) return reject(401);\nlet payload; try { payload = JSON.parse(body.payload); } catch { return reject(400); }\nif (payload.spike !== true || typeof payload.message !== 'string' || payload.message.length > 500) return reject(400);\nreturn [{json:{valid:true,payload}}];"
+        "jsCode": "const crypto=require('crypto');\nconst input=$input.first().json,headers=input.headers||{},body=input.body;\nconst reject=status=>[{json:{valid:false,status}}];\nif(Number(headers['content-length']||0)>65536)return reject(413);\nconst raw=await this.helpers.getBinaryDataBuffer(0,'data');if(raw.length>65536)return reject(413);\nif(!body||Array.isArray(body)||Object.keys(body).length!==1||typeof body.payload!=='string')return reject(400);\nconst timestamp=headers['x-lendloop-timestamp']||'',signature=headers['x-lendloop-signature']||'';\nif(!/^(0|[1-9]\\d{0,12})$/.test(timestamp)||Math.abs(Date.now()/1000-Number(timestamp))>300||!/^v1=[a-f0-9]{64}$/.test(signature))return reject(401);\nconst expected=crypto.createHmac('sha256',$env.CONVEX_TO_N8N_SECRET).update('v1\\n'+timestamp+'\\nnotify\\n'+body.payload,'utf8').digest();\nif(!crypto.timingSafeEqual(expected,Buffer.from(signature.slice(3),'hex')))return reject(401);\nlet payload;try{payload=JSON.parse(body.payload);}catch{return reject(400);}\nconst keys=['eventId','type','loanId','recipientId','toolName','status','startDate','endDate'];\nif(!payload||Array.isArray(payload)||Object.keys(payload).length!==keys.length||keys.some(k=>typeof payload[k]!=='string')||Object.keys(payload).some(k=>!keys.includes(k)))return reject(400);\nconst status={requested:'pending',approved:'approved',declined:'declined',cancelled:'cancelled',returned:'returned'};\nif(status[payload.type]!==payload.status||['eventId','loanId','recipientId'].some(k=>!payload[k]||payload[k].length>80)||!payload.toolName||payload.toolName.length>100||!/^\\d{4}-\\d{2}-\\d{2}$/.test(payload.startDate)||!/^\\d{4}-\\d{2}-\\d{2}$/.test(payload.endDate))return reject(400);\nreturn [{json:{valid:true,payload}}];"
       }
     },
     {
-      "id": "Valid",
-      "name": "Valid",
+      "id": "Valid-request",
+      "name": "Valid request",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [400, 0],
@@ -41,7 +44,7 @@
           },
           "conditions": [
             {
-              "id": "valid",
+              "id": "Valid request",
               "leftValue": "={{ $json.valid }}",
               "rightValue": true,
               "operator": {
@@ -57,21 +60,35 @@
       }
     },
     {
-      "id": "Sign-callback",
-      "name": "Sign callback",
+      "id": "Accept-request",
+      "name": "Accept request",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [1000, 0],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"accepted\":true}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "Format-notification",
+      "name": "Format notification",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [600, 0],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst value=$input.first().json.payload;\nif(value.forceFailure) throw new Error('M1 intentional error-workflow probe');\nconst payload=JSON.stringify({spike:true,message:value.message});\nconst timestamp=String(Math.floor(Date.now()/1000));\nconst signature='v1='+crypto.createHmac('sha256',$env.N8N_TO_CONVEX_SECRET).update(`v1\\n${timestamp}\\nnotification-result\\n${payload}`,'utf8').digest('hex');\nreturn [{json:{timestamp,signature,envelope:JSON.stringify({payload})}}];"
+        "jsCode": "const crypto=require('crypto');\nfunction signed(value,purpose){const payload=JSON.stringify(value),timestamp=String(Math.floor(Date.now()/1000));const signature='v1='+crypto.createHmac('sha256',$env.N8N_TO_CONVEX_SECRET).update('v1\\n'+timestamp+'\\n'+purpose+'\\n'+payload,'utf8').digest('hex');return {timestamp,signature,envelope:JSON.stringify({payload})};}\nconst value=$input.first().json.payload;\nconst day=d=>new Date(d+'T00:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});\nconst dates=value.startDate===value.endDate?day(value.startDate):day(value.startDate)+' to '+day(value.endDate);\nconst texts={requested:'New request to borrow '+value.toolName+' for '+dates+'.',approved:'Your request to borrow '+value.toolName+' for '+dates+' was approved.',declined:'Your request to borrow '+value.toolName+' for '+dates+' was declined.',cancelled:'The loan of '+value.toolName+' for '+dates+' was cancelled.',returned:value.toolName+' was marked as returned. Thanks for borrowing.'};\nconst message=texts[value.type].slice(0,500);\nconsole.log('Formatted request notification');\nreturn [{json:signed({eventId:value.eventId,message,n8nExecutionId:String($execution.id)},'notification-result')}];"
       }
     },
     {
-      "id": "Callback",
-      "name": "Callback",
+      "id": "Deliver-notification",
+      "name": "Deliver notification",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [900, 0],
+      "position": [800, 0],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.LENDLOOP_CONVEX_HTTP_URL + '/automation/notifications' }}",
@@ -95,31 +112,31 @@
         "options": {
           "timeout": 30000
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
     },
     {
-      "id": "Success",
-      "name": "Success",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
-      "position": [1100, 0],
+      "id": "Check-delivery",
+      "name": "Check delivery",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 0],
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ $json }}",
-        "options": {
-          "responseCode": 200
-        }
+        "jsCode": "if($input.first().json.error)throw new Error('Notification callback failed.');return $input.all();"
       }
     },
     {
-      "id": "Reject",
-      "name": "Reject",
+      "id": "Reject-request",
+      "name": "Reject request",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [600, 220],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={\"accepted\":false}",
+        "responseBody": "{\"accepted\":false}",
         "options": {
           "responseCode": "={{ $json.status }}"
         }
@@ -127,62 +144,73 @@
     }
   ],
   "connections": {
-    "Webhook": {
+    "Request webhook": {
       "main": [
         [
           {
-            "node": "Verify",
+            "node": "Verify signature",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Verify": {
+    "Verify signature": {
       "main": [
         [
           {
-            "node": "Valid",
+            "node": "Valid request",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Valid": {
+    "Valid request": {
       "main": [
         [
           {
-            "node": "Sign callback",
+            "node": "Format notification",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Reject",
+            "node": "Reject request",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Sign callback": {
+    "Format notification": {
       "main": [
         [
           {
-            "node": "Callback",
+            "node": "Deliver notification",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Callback": {
+    "Deliver notification": {
       "main": [
         [
           {
-            "node": "Success",
+            "node": "Accept request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Accept request": {
+      "main": [
+        [
+          {
+            "node": "Check delivery",
             "type": "main",
             "index": 0
           }
@@ -192,7 +220,6 @@
   },
   "settings": {
     "executionOrder": "v1",
-    "errorWorkflow": "LendLoopErrorM1"
-  },
-  "active": true
+    "errorWorkflow": "LendLoopError"
+  }
 }

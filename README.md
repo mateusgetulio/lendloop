@@ -2,7 +2,7 @@
 
 A neighborhood tool-lending board. Neighbors can list tools, request dates, approve or decline requests, cancel future reservations, and confirm returns. Administrators can remove any listing, view all loans, and mark Trusted Lenders.
 
-The automation connection is still a temporary signed round-trip proof. Changes create pending event records, but nothing dispatches them yet. Notifications, reminders, the automation dashboard and a repeatable demo seed are not implemented.
+Changes create durable automation events in the same transaction as each loan transition. Signed workflows deliver personal notifications and daily overdue reminders. Administrators can monitor failures, pending delivery age and missing reminders, and retry failed deliveries. A repeatable demonstration seed and activity history are not implemented.
 
 - `DECISIONS.md`: front-end choices and their sources.
 - `docs/verification.md`: checks performed, results and limitations.
@@ -68,24 +68,36 @@ npx convex run admin:promote '{"userId":"<local-user-id>"}'
 
 This is an internal developer operation, not a browser-callable promotion endpoint. The Admin destination appears for that account. Trusted Lender is only a badge and never grants permissions.
 
-## Temporary automation connection
+## Notifications and reminders
 
 ```sh
 docker compose up -d
 sh scripts/n8n-setup.sh
-node scripts/spike.mjs
 node scripts/check-clerk.mjs
-npx convex run spike:roundTrip
-node scripts/spike.mjs --force-error
 ```
 
-Workflow import targets the dedicated project volume and fixed IDs. Repeating it overwrites those IDs, so never use an instance holding unrelated work. The first visit to `http://localhost:5678` shows n8n's owner screen. The overdue export stays inactive.
+Import targets the dedicated project volume and fixed workflow IDs. It unpublishes existing workflows on that instance, imports and publishes request notifications, overdue reminders and the error workflow, then restarts n8n. Never run it on an instance holding unrelated work. In n8n, open Settings for Request notifications and Overdue reminders and confirm Workflow errors is selected as the error workflow. The imported definitions already reference its fixed identifier. The first visit to `http://localhost:5678` shows n8n's owner screen.
 
 Docker reaches the backend at `host.docker.internal:3211`; the backend reaches n8n through `localhost:5678`. The Linux host-gateway entry is configured but integration networking has only been exercised on macOS with OrbStack.
 
-The signing script tests valid delivery and nine rejection cases per receiver. The Clerk script creates a temporary development account, verifies a real session token through the account query, provisions the profile, checks a modified token is rejected, then deletes the Clerk account and sessions. Local profile/history deletion is not implemented, so its synthetic profile remains locally. No secrets or tokens are printed. It refuses production Clerk keys and non-loopback backends.
+Notification dispatch claims attempts transactionally before networking. A successful webhook response acknowledges receipt; only the signed callback marks delivery. A minute sweep recovers due work, with five attempts and a final callback deadline. Set the optional Convex variable `AUTOMATION_BACKOFF_SECONDS` to five positive integer seconds to override `60,120,240,480,120`. Admin retry preserves the event identifier and notification deduplication key.
 
-The forced-error command should return HTTP 500. Inspect the failed production execution and the successful error workflow that follows it. These probes do not deliver product notifications, deduplicate callbacks or run reminders.
+If you finish setup after 10:30 in `APP_TIMEZONE`, the admin page may show `reminder-run-missing` for that day, because no scheduled run has happened yet. It stops once a day has a scheduled run. Overdue reminders run at 09:00 and hourly from 10:00 through 17:00 in `APP_TIMEZONE`. Each execution scans stable pages of 50 approved overdue loans, continuing past empty filtered pages, up to 20 pages. Callbacks recheck return status and the current business date. Concurrent runs create one row per loan and date. The calendar job records missing fetches and missing reminders once per day after 10:30, including a missing fetch when no loans are overdue. The administration page shows these recorded alerts separately from the current missing-reminder list.
+
+Workflow exports contain no credentials or pinned execution data. Keep directional secrets in the runtime environment. Notifications are stored in the app; no email or SMS provider is connected. The app guarantees one stored row per key. External delivery would need a provider idempotency key or an explicit at-least-once policy, because a provider can accept a message before a lost callback or a return race.
+
+## Running-service verification
+
+```sh
+npx playwright install chromium
+node --experimental-strip-types scripts/verify.ts
+```
+
+Run with Next.js, local Convex and the dedicated n8n instance already running, with development Clerk configuration in `.env.local` and Docker configuration in `.env`. This script stops and restarts n8n, changes retry delays temporarily, creates synthetic loans, and runs published workflows. Use a dedicated local deployment. It creates three temporary Clerk accounts, signs in through the browser, promotes one locally, and deletes the Clerk accounts and sessions afterward. Local profile records remain because account deletion is not implemented.
+
+Internal testing operations refuse to run unless `DEMO_SEED_ENABLED=true`. The script verifies this refusal, temporarily enables the flag, removes its fixture loans and restores the previous flag, retry delays and signing configuration. It writes ignored machine-readable results and screen captures under `test-results/`. The script exercises real parallel approval processes, delivery outages, callback failures, concurrent reminder runs, return ordering, pagination, published workflow errors, health alerts and phone/desktop keyboard navigation. It never prints private keys or session tokens.
+
+The separate Clerk token check uses the real account query and rejects modified tokens. It refuses production Clerk keys and non-loopback backends.
 
 ## Security and architecture
 
@@ -93,9 +105,9 @@ The browser uses Clerk session tokens with Convex audience. Every authenticated 
 
 Listing and loan reads are paginated. The public projection excludes internal IDs and all owner details. Signed-in tool detail exposes busy dates without borrowers. Removed listings use soft deletion and loans retain immutable tool-name snapshots. User text is rendered as text.
 
-The temporary integration uses a string envelope, directional HMAC-SHA256 secrets, constant-time verification, a five-minute clock window and 64 KiB checks. Trusted n8n Code nodes can read the instance environment and Node crypto. Anyone who can edit a workflow can read its secrets. This dedicated, loopback-bound mock-data instance is not production hardening. Execution retention is seven days and internal runners emit a deprecation warning.
+The integration uses a string envelope, directional HMAC-SHA256 secrets, constant-time verification, a five-minute clock window and 64 KiB checks. Trusted n8n Code nodes can read the instance environment and Node crypto. Anyone who can edit a workflow can read its secrets. This dedicated, loopback-bound mock-data instance is not production hardening. Execution retention is seven days and internal runners emit a deprecation warning.
 
-Before production: isolate workflow runners, restrict access, use managed secrets and rotation, enable HTTPS throughout, add external monitoring, rate limits, backups and retention policies, and use a notification provider with an explicit duplicate-delivery policy.
+Before production: isolate workflow runners, restrict access, use managed secrets and rotation, enable HTTPS throughout, add external monitoring, rate limits, backups and retention policies, support reminder scans beyond 1,000 overdue loans, and use a notification provider with an explicit duplicate-delivery policy.
 
 ## Checks
 
@@ -109,8 +121,8 @@ docker compose config -q
 npm audit --audit-level=high
 ```
 
-The test suite covers verified-actor boundaries, permissions, date validation, transitions, event atomicity, soft removal, clock boundaries and token contrast. CI runs it on every push, and dependencies are pinned exactly. Production compilation works with fictional public values in `.env.ci`, without a secret Clerk key or running backend.
+The test suite covers verified-actor boundaries, permissions, date validation, transitions, event atomicity, soft removal, clock boundaries, signatures, delivery claims, reminder deduplication, health alerts and token contrast. CI runs it on every push, and dependencies are pinned exactly. Production compilation works with fictional public values in `.env.ci`, without a secret Clerk key or running backend.
 
 CI uses full-SHA-pinned actions, the Node version file, `npm ci`, and a checksum-pinned Gitleaks binary scanning full history. Audit is report-only. Generated Convex types are checked in so type checks need no backend.
 
-**A green badge does not cover browser sign-in, workflow executions or real concurrency.** Those need running services. Chromium sign-in, screen sizes, keyboard use and live backend checks are recorded separately in `docs/verification.md`. Real concurrent approvals and complete automation reliability remain unverified.
+**A green badge does not cover browser sign-in, workflow executions or real concurrency.** Those need running services. Chromium sign-in, screen sizes, keyboard use and live backend checks are recorded separately in `docs/verification.md`. Running-service verification requires the dedicated development environment and is separate from CI.

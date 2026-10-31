@@ -1,30 +1,448 @@
 {
-  "id": "LendLoopOverdueM1",
-  "name": "Overdue reminders: not implemented yet",
+  "id": "LendLoopOverdue",
+  "name": "Overdue reminders",
+  "active": false,
   "nodes": [
     {
-      "id": "Manual",
-      "name": "Manual",
+      "id": "Daily-and-recovery-schedule",
+      "name": "Daily and recovery schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            },
+            {
+              "field": "cronExpression",
+              "expression": "0 10-17 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "Run-now",
+      "name": "Run now",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [0, 0],
+      "position": [0, 180],
       "parameters": {}
     },
     {
-      "id": "Not-implemented",
-      "name": "Not implemented",
+      "id": "Prepare-fetch",
+      "name": "Prepare fetch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [200, 0],
+      "parameters": {
+        "jsCode": "const crypto=require('crypto');\nfunction signed(value,purpose){const payload=JSON.stringify(value),timestamp=String(Math.floor(Date.now()/1000));const signature='v1='+crypto.createHmac('sha256',$env.N8N_TO_CONVEX_SECRET).update('v1\\n'+timestamp+'\\n'+purpose+'\\n'+payload,'utf8').digest('hex');return {timestamp,signature,envelope:JSON.stringify({payload})};}\nconst value=$input.first().json;return [{json:{cursor:value.cursor??null,pages:value.pages??0,failedCount:value.failedCount??0,...signed({cursor:value.cursor??null,limit:50},'overdue-fetch')}}];"
+      }
+    },
+    {
+      "id": "Fetch-overdue",
+      "name": "Fetch overdue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LENDLOOP_CONVEX_HTTP_URL + '/automation/overdue' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-LendLoop-Timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "X-LendLoop-Signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.envelope }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "Process-page",
+      "name": "Process page",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 0],
+      "parameters": {
+        "jsCode": "const page=$input.first().json,state=$('Prepare fetch').all(0,$runIndex)[0].json;\nif(!Array.isArray(page.loans)||typeof page.isDone!=='boolean')throw new Error('Invalid overdue response');\nconst next={cursor:page.cursor,pages:state.pages+1,failedCount:state.failedCount,isDone:page.isDone};\nreturn page.loans.length?page.loans.map(loan=>({json:{...loan,state:next}})):[{json:{skip:true,state:next}}];"
+      }
+    },
+    {
+      "id": "Has-reminder",
+      "name": "Has reminder",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [800, 0],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Has reminder",
+              "leftValue": "={{ !$json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "Format-reminders",
+      "name": "Format reminders",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 0],
+      "parameters": {
+        "jsCode": "const crypto=require('crypto');\nfunction signed(value,purpose){const payload=JSON.stringify(value),timestamp=String(Math.floor(Date.now()/1000));const signature='v1='+crypto.createHmac('sha256',$env.N8N_TO_CONVEX_SECRET).update('v1\\n'+timestamp+'\\n'+purpose+'\\n'+payload,'utf8').digest('hex');return {timestamp,signature,envelope:JSON.stringify({payload})};}\nreturn $input.all().map(item=>{const loan=item.json;console.log('Formatted overdue reminder');return {json:signed({loanId:loan.loanId,reminderKey:loan.reminderKey,message:('Please return '+loan.toolName+'. It was due on '+new Date(loan.endDate+'T00:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'})+'.').slice(0,500),n8nExecutionId:String($execution.id)},'reminder-result')};});"
+      }
+    },
+    {
+      "id": "Deliver-reminder",
+      "name": "Deliver reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LENDLOOP_CONVEX_HTTP_URL + '/automation/reminders' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-LendLoop-Timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "X-LendLoop-Signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.envelope }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "Collect-failures",
+      "name": "Collect failures",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1400, 0],
+      "parameters": {
+        "jsCode": "const state=$('Process page').all(0,$runIndex)[0].json.state;\nconst failed=$input.all().filter(item=>item.json.error||item.json.result==='stale').length;\nreturn [{json:{...state,failedCount:state.failedCount+failed,more:!state.isDone&&state.pages<20,capped:!state.isDone&&state.pages>=20,report:state.failedCount+failed>0||!state.isDone&&state.pages>=20}}];"
+      }
+    },
+    {
+      "id": "More-pages",
+      "name": "More pages",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1600, 0],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "More pages",
+              "leftValue": "={{ $json.more }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "Report-failures",
+      "name": "Report failures",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1800, 0],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Report failures",
+              "leftValue": "={{ $json.report }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "Format-failure-report",
+      "name": "Format failure report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 0],
+      "parameters": {
+        "jsCode": "const crypto=require('crypto');\nfunction signed(value,purpose){const payload=JSON.stringify(value),timestamp=String(Math.floor(Date.now()/1000));const signature='v1='+crypto.createHmac('sha256',$env.N8N_TO_CONVEX_SECRET).update('v1\\n'+timestamp+'\\n'+purpose+'\\n'+payload,'utf8').digest('hex');return {timestamp,signature,envelope:JSON.stringify({payload})};}\nconst state=$input.first().json;return [{json:signed({workflow:'overdue-reminders',executionId:String($execution.id),node:state.capped?'page-cap':'item-failed',message:state.capped?'Reminder scan exceeded its page limit.':'Some reminder callbacks failed.'},'failure-report')}];"
+      }
+    },
+    {
+      "id": "Report-reminder-failure",
+      "name": "Report reminder failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LENDLOOP_CONVEX_HTTP_URL + '/automation/failures' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-LendLoop-Timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "X-LendLoop-Signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.envelope }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "Finished",
+      "name": "Finished",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [200, 0],
+      "position": [2400, 0],
       "parameters": {}
     }
   ],
   "connections": {
-    "Manual": {
+    "Daily and recovery schedule": {
       "main": [
         [
           {
-            "node": "Not implemented",
+            "node": "Prepare fetch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run now": {
+      "main": [
+        [
+          {
+            "node": "Prepare fetch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare fetch": {
+      "main": [
+        [
+          {
+            "node": "Fetch overdue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch overdue": {
+      "main": [
+        [
+          {
+            "node": "Process page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process page": {
+      "main": [
+        [
+          {
+            "node": "Has reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has reminder": {
+      "main": [
+        [
+          {
+            "node": "Format reminders",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Collect failures",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format reminders": {
+      "main": [
+        [
+          {
+            "node": "Deliver reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deliver reminder": {
+      "main": [
+        [
+          {
+            "node": "Collect failures",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect failures": {
+      "main": [
+        [
+          {
+            "node": "More pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "More pages": {
+      "main": [
+        [
+          {
+            "node": "Prepare fetch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Report failures",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Report failures": {
+      "main": [
+        [
+          {
+            "node": "Format failure report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Finished",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format failure report": {
+      "main": [
+        [
+          {
+            "node": "Report reminder failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Report reminder failure": {
+      "main": [
+        [
+          {
+            "node": "Finished",
             "type": "main",
             "index": 0
           }
@@ -34,7 +452,6 @@
   },
   "settings": {
     "executionOrder": "v1",
-    "errorWorkflow": "LendLoopErrorM1"
-  },
-  "active": false
+    "errorWorkflow": "LendLoopError"
+  }
 }

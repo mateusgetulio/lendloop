@@ -1,16 +1,9 @@
 import { internalMutation, query } from "./_generated/server";
-import { today } from "./lib/dates";
+import { refreshCalendar } from "./lib/automation";
 export const tick = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const day = today();
-    const state = await ctx.db
-      .query("systemState")
-      .withIndex("by_key", (q) => q.eq("key", "calendar"))
-      .unique();
-    if (!state)
-      await ctx.db.insert("systemState", { key: "calendar", today: day });
-    else if (state.today !== day) await ctx.db.patch(state._id, { today: day });
+    await refreshCalendar(ctx, Date.now());
   },
 });
 export const settings = query({

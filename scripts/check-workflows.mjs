@@ -18,16 +18,16 @@ const workflows = readdirSync("n8n/workflows")
     );
     return data;
   });
-for (const id of ["LendLoopNotifyM1", "LendLoopOverdueM1", "LendLoopErrorM1"])
+for (const id of ["LendLoopNotify", "LendLoopOverdue", "LendLoopError"])
   assert.equal(
     workflows.filter((w) => w.id === id).length,
     1,
     `Expected unique workflow ${id}`,
   );
-for (const id of ["LendLoopNotifyM1", "LendLoopOverdueM1"])
+for (const id of ["LendLoopNotify", "LendLoopOverdue"])
   assert.equal(
     workflows.find((w) => w.id === id).settings.errorWorkflow,
-    "LendLoopErrorM1",
+    "LendLoopError",
   );
 assert.match(
   readFileSync("compose.yaml", "utf8"),

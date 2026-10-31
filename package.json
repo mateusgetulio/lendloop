@@ -11,7 +11,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "check:workflows": "node scripts/check-workflows.mjs"
+    "check:workflows": "node scripts/check-workflows.mjs",
+    "verify": "node --experimental-strip-types scripts/verify.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "7.9.23",

@@ -9,15 +9,19 @@
  */
 
 import type * as admin from "../admin.js";
+import type * as automation from "../automation.js";
 import type * as clock from "../clock.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_automation from "../lib/automation.js";
 import type * as lib_dates from "../lib/dates.js";
 import type * as lib_domain from "../lib/domain.js";
+import type * as lib_signatures from "../lib/signatures.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as loans from "../loans.js";
-import type * as spike from "../spike.js";
+import type * as notifications from "../notifications.js";
+import type * as testing from "../testing.js";
 import type * as tools from "../tools.js";
 import type * as users from "../users.js";
 
@@ -29,15 +33,19 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
+  automation: typeof automation;
   clock: typeof clock;
   crons: typeof crons;
   http: typeof http;
   "lib/auth": typeof lib_auth;
+  "lib/automation": typeof lib_automation;
   "lib/dates": typeof lib_dates;
   "lib/domain": typeof lib_domain;
+  "lib/signatures": typeof lib_signatures;
   "lib/validators": typeof lib_validators;
   loans: typeof loans;
-  spike: typeof spike;
+  notifications: typeof notifications;
+  testing: typeof testing;
   tools: typeof tools;
   users: typeof users;
 }>;

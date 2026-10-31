@@ -1,31 +1,32 @@
 {
-  "id": "LendLoopErrorM1",
-  "name": "Foundation probe: error report",
+  "id": "LendLoopError",
+  "name": "Workflow errors",
+  "active": false,
   "nodes": [
     {
-      "id": "Error-Trigger",
-      "name": "Error Trigger",
+      "id": "Error-trigger",
+      "name": "Error trigger",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
       "position": [0, 0],
       "parameters": {}
     },
     {
-      "id": "Sign-failure",
-      "name": "Sign failure",
+      "id": "Format-execution-failure",
+      "name": "Format execution failure",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [300, 0],
+      "position": [200, 0],
       "parameters": {
-        "jsCode": "const crypto=require('crypto');\nconst payload=JSON.stringify({spike:true,errorWorkflowRan:true});\nconst timestamp=String(Math.floor(Date.now()/1000));\nconst signature='v1='+crypto.createHmac('sha256',$env.N8N_TO_CONVEX_SECRET).update(`v1\\n${timestamp}\\nfailure-report\\n${payload}`,'utf8').digest('hex');\nreturn [{json:{timestamp,signature,envelope:JSON.stringify({payload})}}];"
+        "jsCode": "const crypto=require('crypto');\nfunction signed(value,purpose){const payload=JSON.stringify(value),timestamp=String(Math.floor(Date.now()/1000));const signature='v1='+crypto.createHmac('sha256',$env.N8N_TO_CONVEX_SECRET).update('v1\\n'+timestamp+'\\n'+purpose+'\\n'+payload,'utf8').digest('hex');return {timestamp,signature,envelope:JSON.stringify({payload})};}\nconst value=$input.first().json;\nreturn [{json:signed({workflow:value.workflow?.id==='LendLoopNotify'?'request-notifications':'overdue-reminders',executionId:String(value.execution?.id||$execution.id),node:'execution-failed',message:'Workflow execution failed. Inspect the private execution record.'},'failure-report')}];"
       }
     },
     {
-      "id": "Report-failure",
-      "name": "Report failure",
+      "id": "Report-execution-failure",
+      "name": "Report execution failure",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [900, 0],
+      "position": [400, 0],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.LENDLOOP_CONVEX_HTTP_URL + '/automation/failures' }}",
@@ -49,26 +50,29 @@
         "options": {
           "timeout": 30000
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     }
   ],
   "connections": {
-    "Error Trigger": {
+    "Error trigger": {
       "main": [
         [
           {
-            "node": "Sign failure",
+            "node": "Format execution failure",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Sign failure": {
+    "Format execution failure": {
       "main": [
         [
           {
-            "node": "Report failure",
+            "node": "Report execution failure",
             "type": "main",
             "index": 0
           }
@@ -78,6 +82,5 @@
   },
   "settings": {
     "executionOrder": "v1"
-  },
-  "active": true
+  }
 }

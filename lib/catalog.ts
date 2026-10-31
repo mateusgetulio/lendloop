@@ -26,6 +26,7 @@ function format(value: string, withYear: boolean) {
     timeZone: "UTC",
   }).format(day(value));
 }
+export const formatDay = (value: string) => format(value, true);
 export function formatRange(startDate: string, endDate: string) {
   if (startDate === endDate) return format(startDate, true);
   const sameYear = startDate.slice(0, 4) === endDate.slice(0, 4);

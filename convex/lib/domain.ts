@@ -1,3 +1,4 @@
+import { internal } from "../_generated/api";
 import { ConvexError } from "convex/values";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -32,7 +33,7 @@ export async function event(
   recipientId: Id<"users">,
 ) {
   const now = Date.now();
-  await ctx.db.insert("automationEvents", {
+  const eventId = await ctx.db.insert("automationEvents", {
     type,
     loanId: loan._id,
     recipientId,
@@ -49,6 +50,7 @@ export async function event(
     createdAt: now,
     updatedAt: now,
   });
+  await ctx.scheduler.runAfter(0, internal.automation.dispatch, { eventId });
 }
 export async function createListing(
   ctx: MutationCtx,

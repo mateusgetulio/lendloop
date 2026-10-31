@@ -86,6 +86,14 @@ export function SessionLayout({ children }: { children: ReactNode }) {
                     {name}
                   </Link>
                 ))}
+                <Link
+                  href="/notifications"
+                  aria-current={
+                    pathname === "/notifications" ? "page" : undefined
+                  }
+                >
+                  Notifications
+                </Link>
                 {user?.role === "admin" && (
                   <Link
                     href="/admin"
@@ -113,6 +121,9 @@ export function SessionLayout({ children }: { children: ReactNode }) {
                 </button>
                 {more && (
                   <div id="account-menu" className="more-menu">
+                    <Link href="/notifications" onClick={() => setMore(false)}>
+                      Notifications
+                    </Link>
                     {user?.role === "admin" && (
                       <Link href="/admin" onClick={() => setMore(false)}>
                         Admin

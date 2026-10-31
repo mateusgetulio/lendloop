@@ -73,7 +73,7 @@ export default defineSchema({
   })
     .index("by_key", ["key"])
     .index("by_loan", ["loanId"])
-    .index("by_recipient", ["recipientId"]),
+    .index("by_recipient", ["recipientId", "occurredAt"]),
   automationFailures: defineTable({
     key: v.string(),
     source: v.string(),

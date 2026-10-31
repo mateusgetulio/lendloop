@@ -12,6 +12,7 @@ import {
   message,
 } from "@/components/common";
 import type { Tool } from "@/components/tool-card";
+import { AutomationPanel } from "@/components/automation-panel";
 import { formatRange } from "@/lib/catalog";
 function Administration() {
   const loans = usePaginatedQuery(api.admin.loans, {}, { initialNumItems: 10 }),
@@ -188,6 +189,7 @@ function Administration() {
         )}
         <MoreResults status={tools.status} loadMore={tools.loadMore} />
       </section>
+      <AutomationPanel />
       {deleting && (
         <Confirm
           title="Remove listing"
